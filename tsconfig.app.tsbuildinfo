@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/config/features.ts","./src/data/businesses.ts","./src/data/samplebusinesses.ts","./src/domain/classification.ts","./src/lib/supabase.ts","./src/map/mapview.tsx","./src/map/tilesource.ts"],"version":"5.9.3"}
