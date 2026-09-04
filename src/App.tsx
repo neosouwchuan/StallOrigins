@@ -58,7 +58,7 @@ export default function App() {
           <div className="flex items-baseline justify-between">
             <h1 className="text-base font-bold text-green-800">{BRAND.name}</h1>
             <span className="text-[11px] text-slate-400">
-              Tiong Bahru pilot
+              Bukit Panjang pilot
             </span>
           </div>
           <p className="mt-0.5 text-[11px] text-slate-500">{BRAND.tagline}</p>
@@ -120,9 +120,7 @@ function Banner({
     red: "bg-red-100 text-red-800 ring-red-300",
   } as const;
   return (
-    <div
-      className={`rounded-md px-2 py-1 text-[10px] ring-1 ${tones[tone]}`}
-    >
+    <div className={`rounded-md px-2 py-1 text-[10px] ring-1 ${tones[tone]}`}>
       {children}
     </div>
   );

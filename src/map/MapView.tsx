@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
 import { getTileSource } from "./tileSource";
+import { PILOT } from "../config/pilot";
 import {
   type Business,
   INDEPENDENCE_META,
@@ -8,9 +9,6 @@ import {
   CATEGORY_META,
   originColor,
 } from "../domain/classification";
-
-// Initial map centre (Tiong Bahru, our launch focus). The map works island-wide.
-const INITIAL_CENTER: [number, number] = [1.2848, 103.8317];
 
 interface MapViewProps {
   businesses: Business[];
@@ -21,8 +19,8 @@ export default function MapView({ businesses }: MapViewProps) {
 
   return (
     <MapContainer
-      center={INITIAL_CENTER}
-      zoom={16}
+      center={PILOT.center}
+      zoom={PILOT.zoom}
       className="h-full w-full"
       zoomControl={true}
     >

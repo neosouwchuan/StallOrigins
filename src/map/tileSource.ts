@@ -38,19 +38,20 @@ function withKey(url: string, key: string | undefined): string {
 
 export function getTileSource(): TileSource {
   const env = import.meta.env;
-  const kind = (env.VITE_TILE_KIND as TileKind) ?? "raster";
-  const rawUrl = (env.VITE_TILE_URL as string) ?? DEV_RASTER_URL;
-  const attribution = (env.VITE_TILE_ATTRIBUTION as string) ?? OSM_ATTRIBUTION;
+  // Use `||` not `??`: a var set to "" in .env is "unset", not a real value.
+  const kind = (env.VITE_TILE_KIND as TileKind) || "raster";
+  const rawUrl = (env.VITE_TILE_URL as string) || DEV_RASTER_URL;
+  const attribution = (env.VITE_TILE_ATTRIBUTION as string) || OSM_ATTRIBUTION;
 
   return {
     kind,
-    url: withKey(rawUrl, env.VITE_TILE_API_KEY as string | undefined),
+    url: withKey(rawUrl, (env.VITE_TILE_API_KEY as string) || undefined),
     attribution,
     maxZoom: 19,
   };
 }
 
-/** True when we've fallen back to the dev-only public OSM tiles. */
+/** True when we've fallen back to the dev-only public OSM tiles (var unset or ""). */
 export function isUsingDevTiles(): boolean {
   return !import.meta.env.VITE_TILE_URL;
 }

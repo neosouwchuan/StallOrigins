@@ -5,11 +5,13 @@
 Every business on StallOrigins carries two independent labels. Both default to
 **Unverified**. We never guess: an honest blank beats a wrong label.
 
-## Axis A — Independence
+## Axis A — Independence (structure / scale only)
+This axis says nothing about local vs foreign — that is entirely Axis B's job.
 - **🧍 Independent** — a single owner-operated outlet.
-- **🏘️ Small local chain** — 2–5 outlets, Singapore-based.
-- **🏢 Chain / franchise** — a large domestic chain (>5 outlets).
-- **🌐 Foreign franchise** — a local franchisee of an overseas brand.
+- **🏘️ Small chain** — 2–5 outlets.
+- **🏢 Chain** — a large chain (>5 outlets).
+- **🔗 Franchise** — operates under a licensed brand (whether that brand is
+  local or foreign is recorded separately in Axis B).
 - **❔ Unverified** — not yet classified.
 
 ## Axis B — Ownership origin
@@ -27,8 +29,7 @@ Every business on StallOrigins carries two independent labels. Both default to
 - Sources and last-updated dates are shown publicly so users can judge trust.
 
 ## Open editorial question
-A locally-owned *franchisee* of a foreign brand: "local business worth
-supporting" or "foreign"? Current draft treats the **brand** as foreign
-(Independence = 🌐 foreign franchise) while allowing Origin to reflect the
-franchisee's actual ownership. This needs a final stated stance before public
+A locally-owned *franchisee* of a foreign brand: is its **origin** "local" or
+"foreign"? The independence tag is always **🔗 Franchise** regardless; this is
+purely an Axis-B decision, and it needs a final stated stance before public
 launch. — SPEC §11

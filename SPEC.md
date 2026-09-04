@@ -7,8 +7,8 @@ genuinely local, independent businesses — by showing, for each business, **wha
 kind of business it is** (independent vs chain) and **who owns it** (local vs
 foreign). Built as an OpenStreetMap + Leaflet overlay.
 
-> **Status of this document:** this is a spec written *before* code, for review.
-> Nothing here is built yet. Items marked **[DECIDE]** need your confirmation.
+> **Status of this document:** the spec is the source of truth for the design.
+> Items marked **[DECIDE]** still need your confirmation.
 
 ---
 
@@ -20,8 +20,8 @@ foreign). Built as an OpenStreetMap + Leaflet overlay.
 - Let users **filter** the map (e.g. "show only 🇸🇬 independent hawkers").
 - Let the community **contribute and correct** classifications, with sources.
 - Ship as **one codebase** that works as a website and installs as an app (PWA).
-- Launch **narrow and deep** with a single fully-classified neighbourhood so the
-  map is useful on day one.
+- Launch **narrow and deep** with a single fully-classified area so the map is
+  useful on day one.
 
 ### Non-goals (for now)
 - We do **not** publish the personal identity (full name, NRIC, address) of any
@@ -36,24 +36,29 @@ foreign). Built as an OpenStreetMap + Leaflet overlay.
 ## 2. Pilot scope (cold-start strategy)
 
 To avoid launching a map that is 50,000 grey "Unverified" pins, v1 covers **one
-neighbourhood, fully classified**, before any public launch.
+tightly-bounded area, fully classified**, before any public launch.
 
-- **✅ CONFIRMED pilot area: Tiong Bahru** (decided 2026-09-04).
-  - Contains a hawker centre (Tiong Bahru Market) → dense F&B core.
-  - Surrounding shophouses give a natural mix of *old-guard local* (provision
-    shops, traditional bakeries, coffee shops) vs *trendy* (indie cafes, some
-    foreign-owned) — the exact contrast the app exists to reveal.
-  - Small enough (~a few hundred businesses) to classify by hand for launch.
-- Target for "launch-ready": **≥90% of businesses in the pilot polygon
-  classified** on both axes (independence + origin), each with a source.
-- Expansion after pilot: adjacent neighbourhoods, then island-wide.
+- **✅ CONFIRMED pilot area: Bukit Panjang Plaza + Hillion Mall** (updated
+  2026-09-04). Two adjacent malls at the Bukit Panjang integrated transport hub.
+  - A dense, enclosed mix of tenants — independent stalls, local chains, and
+    foreign franchises side by side — the exact contrast the app exists to
+    reveal.
+  - A small, well-defined footprint (two buildings) makes it realistic to
+    classify **every** tenant by hand for launch.
+- **Seeding is confined to these two malls.** Phase 1 ingests only businesses
+  inside the pilot bounding box, defined once in
+  [`src/config/pilot.ts`](src/config/pilot.ts) (`PILOT.bounds`) and reused
+  verbatim by the Overpass query.
+- Target for "launch-ready": **≥90% of tenants in the two malls classified** on
+  both axes (independence + origin), each with a source.
+- Expansion after pilot: nearby areas, then island-wide.
 
-**Coverage is island-wide, not gated.** The app accepts businesses **anywhere in
-Singapore** and openly accepts that coverage is incomplete — not every stall
-will be present. Tiong Bahru is only where we *focus classification effort* for
-launch, not a boundary that restricts data. Nothing on the map is shaded or
-marked out-of-scope; the map simply opens centred on Tiong Bahru. (There is
-deliberately no `coverage_areas` table — see §4.)
+**Display coverage is island-wide, not gated.** The app accepts and shows
+businesses **anywhere in Singapore** and openly accepts that coverage is
+incomplete. The Bukit Panjang malls are only where we *focus seeding &
+classification effort* for launch, not a boundary that restricts what the map
+can display. The map simply opens centred on the malls; nothing is shaded or
+marked out-of-scope. (There is deliberately no `coverage_areas` table — see §4.)
 
 ---
 
@@ -92,10 +97,9 @@ applied consistently:
 - Every non-`unverified` value **requires a `source`** (see data model): a URL,
   a citation ("owner confirmed in person, 2026-09"), or an ACRA entity number.
 
-> These criteria are a starting point and will need a real editorial policy
-> before public launch. **[DECIDE later]** whether franchises like a locally-
-> owned franchisee of a foreign brand count as "local business you should
-> support" — this is a genuine grey area worth a stated stance.
+> A locally-owned *franchisee* of a foreign brand is a genuine grey area: the
+> independence tag is always `franchise`, but its **origin** ("local" or
+> "foreign") needs a stated editorial stance before public launch — see §11.
 
 ---
 
@@ -132,8 +136,18 @@ Extends Supabase `auth.users` with app-specific data.
 
 > **No `coverage_areas` table.** We accept businesses anywhere in Singapore and
 > accept that coverage is incomplete (not every stall will be present). The
-> Tiong Bahru pilot is a *classification-effort focus* (§2), not a boundary that
+> pilot malls are a *classification-effort focus* (§2), not a boundary that
 > gates the data — so it is not modelled as a table.
+
+### Table: `app_settings` — Phase 2
+Runtime-toggleable feature flags (§6.1). Key/boolean rows read by both the app
+and RLS policies.
+| Column | Type | Notes |
+|---|---|---|
+| `key` | text pk | e.g. `allow_anonymous_flagging` |
+| `enabled` | boolean | default false |
+| `description` | text | |
+| `updated_at` | timestamptz | default now() |
 
 ### Table: `subcategories` — Phase 1
 Lookup so subcategories stay consistent (no free-text drift).
@@ -247,6 +261,9 @@ the rest of the schema stays out of PDPA scope.
   `*_source` = evidence for a *classification claim*.
 - **`business_stories` is isolated on purpose** — the only table holding PII,
   consent-gated, so the rest of the schema is PDPA-free.
+- **`businesses_public` view** (SQL migration 06) flattens `location` into
+  lat/lng and joins the subcategory label for the client; `security_invoker`
+  means it honours the base table's RLS.
 
 ### Row-Level Security (enforced in DB, not just UI)
 Role comes from `profiles.role` (`contributor` | `moderator` | `admin`).
@@ -268,9 +285,12 @@ Role comes from `profiles.role` (`contributor` | `moderator` | `admin`).
 The map is never empty, but ownership is never guessed.
 
 1. **Seed pins** (all `unverified`) for the pilot area:
-   - `data.gov.sg` hawker centre + stall datasets (for the hawker core).
-   - **OpenStreetMap POIs** within the pilot polygon (shops, F&B, services via
-     Overpass API) → import as businesses with `osm_id`, category from OSM tags.
+   - **OpenStreetMap POIs** within the pilot bounding box (`PILOT.bounds`) —
+     shops, F&B, services via the Overpass API → import as businesses with
+     `osm_id`, category from OSM tags. This is the primary seed for the malls.
+     (Implemented in [`scripts/seed-osm.ts`](scripts/seed-osm.ts).)
+   - `data.gov.sg` datasets where relevant (e.g. registered food establishments)
+     as a supplementary cross-check.
 2. **Hand-classify** the pilot set before launch (this is the manual work that
    makes the pilot useful — a spreadsheet → import pipeline).
 3. **Crowdsource** everything after launch via `submissions` + moderation.
@@ -293,7 +313,7 @@ Seeding scripts live in `/scripts` and write to Supabase via the service key
 - Custom markers coloured/badged by classification.
 - Filters: independence, origin, category. "Only show classified" toggle.
 - Search by name; detail card (badges, category, source, last-updated).
-- Map opens centred on Tiong Bahru but works island-wide (no shading/boundary).
+- Map opens centred on the Bukit Panjang malls but works island-wide (no shading/boundary).
 
 ### Phase 2 — Crowdsourcing
 - Auth (Supabase — email magic link / Google).
@@ -316,7 +336,7 @@ Toggleable behaviours live in one place (`src/config/features.ts`):
   error (`flags.reported_by` = null). Lowers the barrier to reporting; can be
   flipped off if abused. The client flag drives the UI; disabling it must also
   be enforced by the `flags` RLS policy (a client flag is not a security
-  boundary). To toggle at runtime without a redeploy, promote this to an
+  boundary). To toggle at runtime without a redeploy, promote this to the
   `app_settings` table read by both the app and the policy.
 
 ---
@@ -351,7 +371,7 @@ Supabase
         ▲
 Seed/admin scripts (/scripts, service key — server-side only)
         ▲
-Sources: data.gov.sg · OpenStreetMap (Overpass) · manual curation
+Sources: OpenStreetMap (Overpass) · data.gov.sg · manual curation
 ```
 
 - **Secrets:** only the Supabase *anon* key ships to the client; RLS is the real
@@ -380,8 +400,8 @@ as cost/scale demands, with a one-line change and no refactor.
 1. **Dev only:** raw OSM raster — fine locally, ⚠️ never in production
    (`tile.openstreetmap.org` usage policy forbids app-scale use).
 2. **Pilot launch:** MapTiler or Stadia Maps free tier (~100k–200k/mo free) +
-   PWA service-worker tile caching. For one small neighbourhood this is
-   effectively **$0** and needs only env vars.
+   PWA service-worker tile caching. For one small area this is effectively **$0**
+   and needs only env vars.
 3. **Island-wide / growth:** self-hosted **Protomaps `.pmtiles`** (a single
    vector file on static hosting, e.g. Cloudflare R2) — decouples cost from user
    count, ~$0 marginal. Reached by pointing the same env vars at the `.pmtiles`
@@ -410,7 +430,8 @@ free hosted tier and later self-host **without rewriting the map**.
   derived data); data.gov.sg has its own terms. Attribution shown in-app.
 
 ## 11. Open decisions
-- ~~Confirm pilot neighbourhood~~ → **✅ Tiong Bahru** (2026-09-04).
+- ~~Confirm pilot neighbourhood~~ → **✅ Bukit Panjang Plaza + Hillion Mall**
+  (2026-09-04), with seeding confined to the two malls (`PILOT.bounds`).
 - **[DECIDE]** Starting tile provider: MapTiler vs Stadia (both free tiers).
   Low stakes — the tile source is env-var-swappable (see §8.1), so this is a
   starting point, not a lock-in.
@@ -421,4 +442,3 @@ free hosted tier and later self-host **without rewriting the map**.
   `allowAnonymousFlagging` feature flag so it can be disabled (§6.1).
 - ~~App name~~ → **Placeholder "StallOrigins"**, centralized in
   `brand.config.ts` for a one-file rename later.
-```

@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -b --noEmit"
+    "typecheck": "tsc -b --noEmit",
+    "seed:osm": "node --experimental-strip-types scripts/seed-osm.ts",
+    "seed:osm:dry": "node --experimental-strip-types scripts/seed-osm.ts --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.115.0",
