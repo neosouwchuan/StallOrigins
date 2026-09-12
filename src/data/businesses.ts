@@ -27,9 +27,16 @@ interface BusinessRow {
   updated_at: string | null;
 }
 
-/** Decode a PostGIS EWKB hex Point (little/big-endian, with or without SRID). */
-function decodeEwkbPoint(hex: string): { lat: number; lng: number } | null {
-  if (!hex || hex.length < 42) return null;
+/**
+ * Decode a PostGIS EWKB hex Point (little/big-endian, with or without SRID).
+ * `businesses.location` is NOT NULL in the schema and PostGIS always emits a
+ * valid Point, so a location is always expected — malformed input throws
+ * (surfacing a real data problem) rather than silently dropping a pin.
+ */
+function decodeEwkbPoint(hex: string): { lat: number; lng: number } {
+  if (!hex || hex.length < 42) {
+    throw new Error(`Invalid EWKB point: "${hex}"`);
+  }
   const bytes = new Uint8Array(hex.length / 2);
   for (let i = 0; i < bytes.length; i++) {
     bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
@@ -41,18 +48,19 @@ function decodeEwkbPoint(hex: string): { lat: number; lng: number } | null {
   const offset = hasSrid ? 9 : 5; // skip order(1)+type(4)[+srid(4)]
   const lng = view.getFloat64(offset, littleEndian);
   const lat = view.getFloat64(offset + 8, littleEndian);
-  if (Number.isNaN(lat) || Number.isNaN(lng)) return null;
+  if (Number.isNaN(lat) || Number.isNaN(lng)) {
+    throw new Error(`Invalid EWKB point coordinates: "${hex}"`);
+  }
   return { lat, lng };
 }
 
-function rowToBusiness(r: BusinessRow): Business | null {
-  const pt = decodeEwkbPoint(r.location);
-  if (!pt) return null;
+function rowToBusiness(r: BusinessRow): Business {
+  const { lat, lng } = decodeEwkbPoint(r.location);
   return {
     id: r.id,
     name: r.name,
-    lat: pt.lat,
-    lng: pt.lng,
+    lat,
+    lng,
     address: r.address ?? undefined,
     category: r.category,
     subcategory: r.subcategory_id ?? undefined,
@@ -67,7 +75,8 @@ function rowToBusiness(r: BusinessRow): Business | null {
 /**
  * Fetch published businesses from Supabase. RLS restricts anon to published
  * rows; we also filter explicitly. Returns [] when Supabase isn't configured
- * (caller falls back to sample data).
+ * (caller falls back to sample data). Every row has a location (NOT NULL), so
+ * each maps to exactly one Business.
  */
 export async function fetchBusinesses(): Promise<Business[]> {
   if (!supabase) return [];
@@ -78,9 +87,5 @@ export async function fetchBusinesses(): Promise<Business[]> {
     )
     .eq("status", "published");
   if (error) throw new Error(error.message);
-  return (
-    (data as BusinessRow[] | null)
-      ?.map(rowToBusiness)
-      .filter((b): b is Business => b !== null) ?? []
-  );
+  return (data as BusinessRow[] | null)?.map(rowToBusiness) ?? [];
 }
