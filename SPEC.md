@@ -173,6 +173,7 @@ The live data. Public reads published rows; writes only via the approval path.
 | `independence_source` | text | **required when** independence ≠ unverified (CHECK) |
 | `origin_source` | text | **required when** origin ≠ unverified (CHECK) |
 | `website` | text | |
+| `building` | text null | Building/mall the tenant sits in (e.g. "Bukit Panjang Plaza"), used to **group shops by building** (Phase 1, §6). Added in a later migration; seedable from OSM or by nearest-mall at pilot scale |
 | `osm_id` | text unique null | provenance if imported from OSM |
 | `data_source` | text | `osm` \| `datagovsg` \| `manual` \| `community` (origin of the pin) |
 | `status` | `business_status` | not null, default `published` |
@@ -312,7 +313,18 @@ Seeding scripts live in `/scripts` and write to Supabase via the service key
 - Full-screen Leaflet map, tiles from MapTiler/Stadia (**not** raw OSM tiles).
 - Custom markers coloured/badged by classification.
 - Filters: independence, origin, category. "Only show classified" toggle.
-- Search by name; detail card (badges, category, source, last-updated).
+- **Search bar** — find a business by name (and by building, see below); selecting
+  a result flies the map to it and opens its card.
+- Detail card (badges, category, source, last-updated).
+- **"My location" button** — recentre the map on the user's current GPS position
+  (browser Geolocation API; graceful fallback if denied/unavailable).
+- **Group shops by building** — tenants that share a building (e.g. Bukit Panjang
+  Plaza vs Hillion Mall) collapse into a single **building marker** showing a
+  count; tapping it expands to the list of shops inside. Keeps dense malls
+  legible instead of a pile of overlapping pins. Building membership comes from
+  the `building` field (see §4); at pilot scale it can be derived from which mall
+  a point is nearest. (These three — search, locate, building grouping — were
+  added to scope 2026-09-04.)
 - Map opens centred on the Bukit Panjang malls but works island-wide (no shading/boundary).
 
 ### Phase 2 — Crowdsourcing
@@ -344,11 +356,17 @@ Toggleable behaviours live in one place (`src/config/features.ts`):
 ## 7. UX sketch
 
 **Main screen:** map fills the viewport. Top: search bar + filter chips
-(`🧍 Independent`, `🇸🇬 Local`, category). Bottom sheet slides up on marker tap.
+(`🧍 Independent`, `🇸🇬 Local`, category). A **"my location"** control (⌖) sits
+over the map to recentre on the user. Bottom sheet slides up on marker tap.
 
-**Marker legend:** colour = origin (green local / grey unverified / amber
-foreign); icon = category (fork = F&B, bag = retail, etc.); a small badge for
-independence.
+**Markers:** individual shops show colour = origin (green local / grey
+unverified / amber foreign); icon = category; a small badge for independence.
+Shops in the same **building** collapse into one **building marker** with a
+tenant count; tapping expands to the list of shops inside (so a mall reads as one
+pin, not fifty).
+
+**Search:** a name/building search; picking a result flies to it and opens the
+card (or the building's shop list).
 
 **Detail card:** name · category · two big badges · source line ("Classified by
 community, source: …, updated 2026-08") · "Report an error" · (Phase 4) owner
