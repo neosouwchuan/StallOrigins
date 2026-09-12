@@ -225,7 +225,7 @@ the approval path.
 | `location` | geography(Point,4326) | not null; PostGIS |
 | `address` | text | |
 | `postal_code` | text | |
-| `building` | text null | Building/mall the outlet sits in (e.g. "Bukit Panjang Plaza") — **group shops by building** (Phase 1, §6); seedable from OSM or by nearest-mall at pilot scale |
+| `building` | text null | Building/mall the outlet sits in (e.g. "Bukit Panjang Plaza") — **group shops by building** (Phase 1, §6). Added in migration 07; the seeder sets it by nearest-mall |
 | `osm_id` | text unique null | provenance if imported from OSM |
 | `data_source` | text | `osm` \| `datagovsg` \| `manual` \| `community` (origin of the pin) |
 | `status` | `business_status` | not null, default `published` |

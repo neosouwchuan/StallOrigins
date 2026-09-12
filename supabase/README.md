@@ -10,7 +10,9 @@ filename order.
 | 03 | `20260904120200_functions.sql` | Triggers, role/feature helpers, `apply_submission`, `reject_submission` |
 | 04 | `20260904120300_rls.sql` | Grants + Row-Level Security policies |
 | 05 | `20260904120400_reference_data.sql` | Feature-flag defaults + subcategory lookup |
-| — | `seed.sql` | DEV-only sample businesses (loaded by `supabase db reset`) |
+| 06 | `20260904120500_views.sql` | `businesses_public` read view (flat lat/lng + labels) |
+| 07 | `20260913120000_brands.sql` | **Standardize on brands** — new `brands` table holds classification; `businesses` become outlets with `brand_id`; backfills existing rows (dedupe by name); adds `building`; brand-aware `apply_submission`; rebuilds the view with a brand join |
+| — | `seed.sql` | DEV-only sample brands + outlets (loaded by `supabase db reset`) |
 
 ## Running locally
 

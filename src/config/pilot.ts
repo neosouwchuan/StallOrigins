@@ -26,6 +26,29 @@ export const PILOT = {
   },
 } as const;
 
+/**
+ * The buildings inside the pilot area. Used to assign each seeded outlet a
+ * `building` by nearest centre (SPEC §4/§6 — group shops by building).
+ */
+export const BUILDINGS = [
+  { name: "Bukit Panjang Plaza", lat: 1.3786, lng: 103.7627 },
+  { name: "Hillion Mall", lat: 1.3782, lng: 103.7639 },
+] as const;
+
+/** Name of the building whose centre is nearest the given point. */
+export function nearestBuilding(lat: number, lng: number): string {
+  let best: (typeof BUILDINGS)[number] = BUILDINGS[0];
+  let bestD = Infinity;
+  for (const b of BUILDINGS) {
+    const d = (b.lat - lat) ** 2 + (b.lng - lng) ** 2;
+    if (d < bestD) {
+      bestD = d;
+      best = b;
+    }
+  }
+  return best.name;
+}
+
 /** Overpass `bbox` filter string: "south,west,north,east". */
 export function pilotBboxString(): string {
   const { south, west, north, east } = PILOT.bounds;

@@ -83,6 +83,8 @@ export interface Business {
   lat: number;
   lng: number;
   address?: string;
+  /** Building/mall the outlet sits in (for group-by-building). */
+  building?: string;
   category: Category;
   subcategory?: string;
   independence: Independence;

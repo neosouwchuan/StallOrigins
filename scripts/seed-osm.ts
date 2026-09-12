@@ -1,30 +1,29 @@
 /**
- * Seed businesses from OpenStreetMap, CONFINED to the pilot bounding box
+ * Seed brands + outlets from OpenStreetMap, CONFINED to the pilot bounding box
  * (Bukit Panjang Plaza + Hillion Mall). SPEC §5.
  *
- * Server-side only — writes with the Supabase SERVICE key (bypasses RLS), so
- * this is never bundled into the client. Run it from your machine / CI.
+ * Brand model: each distinct OSM name becomes a `brands` row (unverified), and
+ * each OSM feature becomes a `businesses` outlet referencing it, with `building`
+ * assigned by nearest mall. Server-side only — writes with the Supabase SERVICE
+ * key (bypasses RLS), so this is never bundled into the client.
  *
  *   npm run seed:osm:dry     # query Overpass + print, no DB write, no creds
  *   npm run seed:osm         # write to Supabase (needs SUPABASE_* env vars)
  *
- * Env (put in .env — the SERVICE key is NOT VITE_ prefixed and must stay secret):
- *   SUPABASE_URL           (falls back to VITE_SUPABASE_URL)
- *   SUPABASE_SERVICE_KEY   (required for a real run)
- *   OVERPASS_URL           (optional; default overpass-api.de)
- *
- * Re-runs are safe: rows upsert on `osm_id` with ignoreDuplicates, so existing
- * pins (and any human classifications on them) are never overwritten.
+ * Re-runs are safe: brands upsert on `name` and outlets on `osm_id`, both with
+ * ignoreDuplicates — existing rows (and any human classifications) are kept.
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { PILOT, pilotBboxString, isInPilotArea } from "../src/config/pilot.ts";
+import {
+  PILOT,
+  pilotBboxString,
+  isInPilotArea,
+  nearestBuilding,
+} from "../src/config/pilot.ts";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
-// ---------------------------------------------------------------------------
-// Minimal .env loader (no dependency). Only sets vars not already in the env.
-// ---------------------------------------------------------------------------
 function loadDotEnv(path = ".env") {
   let text: string;
   try {
@@ -47,10 +46,8 @@ function loadDotEnv(path = ".env") {
   }
 }
 
-// ---------------------------------------------------------------------------
 // OSM tags -> our (category, subcategory_id). subcategory slugs must match the
 // `subcategories` lookup (migration 05). null subcategory is allowed.
-// ---------------------------------------------------------------------------
 type Category = "fnb" | "retail" | "services";
 interface Tags {
   [k: string]: string | undefined;
@@ -61,7 +58,6 @@ function classify(t: Tags): { category: Category; subcategory: string | null } |
   const amenity = t.amenity;
   const craft = t.craft;
 
-  // Food & drink
   if (amenity === "restaurant" || amenity === "fast_food")
     return { category: "fnb", subcategory: "restaurant" };
   if (amenity === "cafe") return { category: "fnb", subcategory: "cafe" };
@@ -74,7 +70,6 @@ function classify(t: Tags): { category: Category; subcategory: string | null } |
   if (shop === "coffee" || shop === "tea")
     return { category: "fnb", subcategory: "cafe" };
 
-  // Retail
   if (shop === "greengrocer" || shop === "farm")
     return { category: "retail", subcategory: "grocer" };
   if (shop === "convenience" || shop === "kiosk" || shop === "supermarket")
@@ -88,7 +83,6 @@ function classify(t: Tags): { category: Category; subcategory: string | null } |
   if (shop === "chemist" || amenity === "pharmacy")
     return { category: "retail", subcategory: "pharmacy" };
 
-  // Services
   if (amenity === "clinic" || amenity === "doctors" || amenity === "dentist")
     return { category: "services", subcategory: "clinic" };
   if (shop === "hairdresser" || amenity === "hairdresser" || shop === "beauty")
@@ -101,20 +95,23 @@ function classify(t: Tags): { category: Category; subcategory: string | null } |
   if (shop === "shoe_repair" || shop === "locksmith" || craft === "shoemaker")
     return { category: "services", subcategory: "repair" };
 
-  // Generic fallbacks (keep the pin, no confident subcategory)
   if (shop) return { category: "retail", subcategory: null };
   if (amenity) return { category: "fnb", subcategory: null };
   if (craft) return { category: "services", subcategory: null };
   return null;
 }
 
-interface Row {
+interface BrandRow {
   name: string;
-  location: string; // EWKT — geography accepts 'SRID=4326;POINT(lng lat)'
-  address: string | null;
-  postal_code: string | null;
   category: Category;
   subcategory_id: string | null;
+}
+interface OutletRow {
+  brand_name: string; // resolved to brand_id before insert
+  location: string; // EWKT geography
+  address: string | null;
+  postal_code: string | null;
+  building: string;
   osm_id: string;
   data_source: "osm";
 }
@@ -129,7 +126,7 @@ interface OverpassEl {
 }
 
 async function queryOverpass(): Promise<OverpassEl[]> {
-  const bbox = pilotBboxString(); // "south,west,north,east"
+  const bbox = pilotBboxString();
   const ql = `[out:json][timeout:60];
 (
   nwr["shop"](${bbox});
@@ -155,42 +152,44 @@ out center tags;`;
   return json.elements ?? [];
 }
 
-function toRows(elements: OverpassEl[]): Row[] {
-  const seen = new Set<string>();
-  const rows: Row[] = [];
+function extract(elements: OverpassEl[]): { brands: BrandRow[]; outlets: OutletRow[] } {
+  const brands = new Map<string, BrandRow>();
+  const outlets: OutletRow[] = [];
+  const seenOsm = new Set<string>();
+
   for (const el of elements) {
     const t = el.tags ?? {};
     const name = t.name;
-    if (!name) continue; // skip unnamed features
+    if (!name) continue;
 
     const lat = el.lat ?? el.center?.lat;
     const lng = el.lon ?? el.center?.lon;
     if (lat === undefined || lng === undefined) continue;
-    if (!isInPilotArea(lat, lng)) continue; // strictly honour the confine
+    if (!isInPilotArea(lat, lng)) continue;
 
     const cls = classify(t);
     if (!cls) continue;
 
+    if (!brands.has(name)) {
+      brands.set(name, { name, category: cls.category, subcategory_id: cls.subcategory });
+    }
+
     const osm_id = `${el.type}/${el.id}`;
-    if (seen.has(osm_id)) continue;
-    seen.add(osm_id);
+    if (seenOsm.has(osm_id)) continue;
+    seenOsm.add(osm_id);
 
-    const addr = [t["addr:housenumber"], t["addr:street"]]
-      .filter(Boolean)
-      .join(" ");
-
-    rows.push({
-      name,
+    const addr = [t["addr:housenumber"], t["addr:street"]].filter(Boolean).join(" ");
+    outlets.push({
+      brand_name: name,
       location: `SRID=4326;POINT(${lng} ${lat})`,
       address: addr || null,
       postal_code: t["addr:postcode"] ?? null,
-      category: cls.category,
-      subcategory_id: cls.subcategory,
+      building: nearestBuilding(lat, lng),
       osm_id,
       data_source: "osm",
     });
   }
-  return rows;
+  return { brands: [...brands.values()], outlets };
 }
 
 async function main() {
@@ -199,16 +198,12 @@ async function main() {
   console.log(`Pilot area: ${PILOT.name} — bbox ${pilotBboxString()}`);
   console.log("Querying Overpass…");
   const elements = await queryOverpass();
-  const rows = toRows(elements);
+  const { brands, outlets } = extract(elements);
   console.log(
-    `Overpass returned ${elements.length} elements → ${rows.length} named, in-bounds, classified businesses.`,
+    `Overpass returned ${elements.length} elements → ${brands.length} brands, ${outlets.length} outlets.`,
   );
-
-  // Preview
-  for (const r of rows) {
-    console.log(
-      `  • ${r.name}  [${r.category}${r.subcategory_id ? "/" + r.subcategory_id : ""}]  ${r.osm_id}`,
-    );
+  for (const o of outlets) {
+    console.log(`  • ${o.brand_name}  [${o.building}]  ${o.osm_id}`);
   }
 
   if (DRY_RUN) {
@@ -226,19 +221,41 @@ async function main() {
     process.exit(1);
   }
 
-  const supabase = createClient(url, serviceKey, {
-    auth: { persistSession: false },
-  });
+  const supabase = createClient(url, serviceKey, { auth: { persistSession: false } });
 
-  // ignoreDuplicates: never overwrite existing rows / human classifications.
-  const { data, error } = await supabase
+  // 1. Upsert brands (dedupe on name), never overwriting existing classifications.
+  const { error: brandErr } = await supabase
+    .from("brands")
+    .upsert(brands, { onConflict: "name", ignoreDuplicates: true });
+  if (brandErr) throw new Error(`brands: ${brandErr.message}`);
+
+  // 2. Resolve brand ids by name.
+  const names = brands.map((b) => b.name);
+  const { data: brandRows, error: fetchErr } = await supabase
+    .from("brands")
+    .select("id,name")
+    .in("name", names);
+  if (fetchErr) throw new Error(`resolve brands: ${fetchErr.message}`);
+  const idByName = new Map((brandRows ?? []).map((b) => [b.name as string, b.id as string]));
+
+  // 3. Upsert outlets with their brand_id.
+  const outletRows = outlets.map((o) => ({
+    brand_id: idByName.get(o.brand_name),
+    location: o.location,
+    address: o.address,
+    postal_code: o.postal_code,
+    building: o.building,
+    osm_id: o.osm_id,
+    data_source: o.data_source,
+  }));
+  const { data: inserted, error: outletErr } = await supabase
     .from("businesses")
-    .upsert(rows, { onConflict: "osm_id", ignoreDuplicates: true })
+    .upsert(outletRows, { onConflict: "osm_id", ignoreDuplicates: true })
     .select("osm_id");
-  if (error) throw new Error(error.message);
+  if (outletErr) throw new Error(`outlets: ${outletErr.message}`);
 
   console.log(
-    `\nInserted ${data?.length ?? 0} new businesses (existing pins left untouched).`,
+    `\nUpserted ${brands.length} brands; inserted ${inserted?.length ?? 0} new outlets (existing left untouched).`,
   );
 }
 

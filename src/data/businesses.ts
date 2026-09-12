@@ -7,17 +7,36 @@ import type {
 } from "../domain/classification";
 
 /**
- * Row from the `businesses` table. `location` is a PostGIS geography, which
- * PostgREST returns as EWKB hex (e.g. "0101000020E6100000…"); we decode it to
- * lat/lng client-side (see decodeEwkbPoint). Reading the table directly means
- * the app does not depend on the `businesses_public` view being present.
+ * Reading published outlets from Supabase. Classification lives on the brand
+ * (SPEC §3/§4), so the preferred query embeds the brand. During the migration
+ * window the hosted DB may still be the FLAT schema (classification on
+ * `businesses`, no `brands`); we detect that and fall back, so the app works
+ * against either shape. `location` is a PostGIS geography returned as EWKB hex.
  */
-interface BusinessRow {
+
+interface BrandEmbed {
+  name: string;
+  category: Category;
+  subcategory_id: string | null;
+  independence: Independence;
+  origin: Origin;
+  independence_source: string | null;
+  origin_source: string | null;
+}
+interface OutletRow {
+  id: string;
+  name: string | null; // outlet branch label; null → use brand name
+  location: string;
+  address: string | null;
+  building: string | null;
+  updated_at: string | null;
+  brands: BrandEmbed; // embedded (many outlets → one brand)
+}
+interface FlatRow {
   id: string;
   name: string;
-  location: string; // EWKB hex
+  location: string;
   address: string | null;
-  postal_code: string | null;
   category: Category;
   subcategory_id: string | null;
   independence: Independence;
@@ -29,9 +48,9 @@ interface BusinessRow {
 
 /**
  * Decode a PostGIS EWKB hex Point (little/big-endian, with or without SRID).
- * `businesses.location` is NOT NULL in the schema and PostGIS always emits a
- * valid Point, so a location is always expected — malformed input throws
- * (surfacing a real data problem) rather than silently dropping a pin.
+ * `businesses.location` is NOT NULL and PostGIS always emits a valid Point, so
+ * a location is always expected — malformed input throws rather than silently
+ * dropping a pin.
  */
 function decodeEwkbPoint(hex: string): { lat: number; lng: number } {
   if (!hex || hex.length < 42) {
@@ -54,7 +73,27 @@ function decodeEwkbPoint(hex: string): { lat: number; lng: number } {
   return { lat, lng };
 }
 
-function rowToBusiness(r: BusinessRow): Business {
+function outletToBusiness(r: OutletRow): Business {
+  const { lat, lng } = decodeEwkbPoint(r.location);
+  const brand = r.brands;
+  return {
+    id: r.id,
+    name: r.name ?? brand.name,
+    lat,
+    lng,
+    address: r.address ?? undefined,
+    building: r.building ?? undefined,
+    category: brand.category,
+    subcategory: brand.subcategory_id ?? undefined,
+    independence: brand.independence,
+    origin: brand.origin,
+    independenceSource: brand.independence_source ?? undefined,
+    originSource: brand.origin_source ?? undefined,
+    updatedAt: r.updated_at ? r.updated_at.slice(0, 10) : undefined,
+  };
+}
+
+function flatToBusiness(r: FlatRow): Business {
   const { lat, lng } = decodeEwkbPoint(r.location);
   return {
     id: r.id,
@@ -72,20 +111,44 @@ function rowToBusiness(r: BusinessRow): Business {
   };
 }
 
+/** True when the error means the `brands` relationship isn't in the schema yet. */
+function isMissingBrands(message: string): boolean {
+  return /relationship|brands|schema cache/i.test(message);
+}
+
 /**
- * Fetch published businesses from Supabase. RLS restricts anon to published
- * rows; we also filter explicitly. Returns [] when Supabase isn't configured
- * (caller falls back to sample data). Every row has a location (NOT NULL), so
- * each maps to exactly one Business.
+ * Fetch published businesses. Prefers the brand-embed query; falls back to the
+ * flat schema while the hosted DB hasn't had migration 07 applied. Returns []
+ * when Supabase isn't configured (caller uses bundled sample data).
  */
 export async function fetchBusinesses(): Promise<Business[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+
+  const withBrand = await supabase
     .from("businesses")
     .select(
-      "id,name,location,address,postal_code,category,subcategory_id,independence,origin,independence_source,origin_source,updated_at",
+      "id,name,location,address,building,updated_at," +
+        "brands(name,category,subcategory_id,independence,origin,independence_source,origin_source)",
     )
     .eq("status", "published");
-  if (error) throw new Error(error.message);
-  return (data as BusinessRow[] | null)?.map(rowToBusiness) ?? [];
+
+  if (!withBrand.error) {
+    return (withBrand.data as unknown as OutletRow[]).map(outletToBusiness);
+  }
+  if (!isMissingBrands(withBrand.error.message)) {
+    throw new Error(withBrand.error.message);
+  }
+
+  // Fallback: flat schema (pre-migration-07). Remove once migration 07 is applied.
+  console.warn(
+    "brands table not found — reading flat schema. Apply migration 07 to enable the brand model.",
+  );
+  const flat = await supabase
+    .from("businesses")
+    .select(
+      "id,name,location,address,category,subcategory_id,independence,origin,independence_source,origin_source,updated_at",
+    )
+    .eq("status", "published");
+  if (flat.error) throw new Error(flat.error.message);
+  return (flat.data as unknown as FlatRow[]).map(flatToBusiness);
 }
