@@ -101,6 +101,43 @@ applied consistently:
 > independence tag is always `franchise`, but its **origin** ("local" or
 > "foreign") needs a stated editorial stance before public launch — see §11.
 
+### Franchises & chains (worked examples) — for future review
+The two axes exist precisely so that **"chain/franchise" and "foreign" are never
+collapsed into one judgment**. A chain can be local; a single outlet can be a
+foreign franchise. `chain` = one company owns many outlets; `franchise` = a
+brand licenses independent operators — but *neither value implies an origin*.
+
+| Business (from the Bukit Panjang pilot) | Independence | Origin | Point it makes |
+|---|---|---|---|
+| Independent kopitiam stall | 🧍 Independent | 🇸🇬 Local | The purest "support local" target |
+| FairPrice | 🏢 Chain | 🇸🇬 Local | Big chain, but Singaporean (NTUC) |
+| Popular | 🏢 Chain | 🇸🇬 Local | Local bookstore chain |
+| Ya Kun Kaya Toast | 🔗 Franchise | 🇸🇬 Local | Franchised, but a homegrown SG brand |
+| Watsons / Guardian | 🏢 Chain | 🌍 Foreign | *Feels* local, but foreign-owned |
+| McDonald's / Starbucks | 🔗 Franchise | 🌍 Foreign | Foreign brand |
+
+The rows that justify the two-axis design are **Watsons** (a chain that reads as
+local but isn't) and **FairPrice / Popular** (chains that *are* local) — a
+one-dimensional "chain = not local" label gets all three wrong.
+
+**✅ Standardized model — every business belongs to a brand.** Classification is
+a property of the **brand**, not the individual outlet. A `businesses` row is an
+**outlet** (a physical location/pin) and references exactly one `brands` row via
+`brand_id` (NOT NULL). The brand carries the identity + classification
+(`name`, `independence`, `origin`, sources, `category`, `subcategory`); the
+outlet carries only location-specific facts (coordinates, address, building).
+
+This is **universal** — an independent single store is simply a brand with
+`independence = independent` and exactly one outlet. There is no special-casing:
+McDonald's is a brand with many outlets; "Ah Hock's kopitiam stall" is a brand
+with one. Benefits:
+- Classify a brand **once** → the label applies to every branch automatically.
+- Two outlets of the same brand can never disagree.
+- Pairs naturally with the group-by-building feature (§6).
+
+See the `brands` and `businesses` tables in §4. (Superseded the earlier
+per-outlet classification, decided 2026-09.)
+
 ---
 
 ## 4. Data model
@@ -157,15 +194,15 @@ Lookup so subcategories stay consistent (no free-text drift).
 | `category` | `business_category` | parent axis |
 | `label` | text | e.g. "Hawker stall" |
 
-### Table: `businesses` — Phase 1 (seeded, read-only) → Phase 2 (moderated writes)
-The live data. Public reads published rows; writes only via the approval path.
+### Table: `brands` — Phase 1  (identity + classification live HERE)
+Every outlet belongs to exactly one brand (§3). Classification is per-brand, so
+it is set once and applies to all branches. An **independent single store is a
+brand with one outlet**; a chain/franchise is a brand with many — no special
+casing.
 | Column | Type | Notes |
 |---|---|---|
 | `id` | uuid pk | default `gen_random_uuid()` |
-| `name` | text | not null |
-| `location` | geography(Point,4326) | not null; PostGIS |
-| `address` | text | |
-| `postal_code` | text | |
+| `name` | text | not null — the brand / business name |
 | `category` | `business_category` | not null |
 | `subcategory_id` | text null | FK → `subcategories.id` |
 | `independence` | `independence_level` | not null, default `unverified` |
@@ -173,12 +210,37 @@ The live data. Public reads published rows; writes only via the approval path.
 | `independence_source` | text | **required when** independence ≠ unverified (CHECK) |
 | `origin_source` | text | **required when** origin ≠ unverified (CHECK) |
 | `website` | text | |
+| `created_by` | uuid null | FK → `profiles.id` |
+| `created_at` / `updated_at` | timestamptz | default now() |
+
+### Table: `businesses` (outlets) — Phase 1 (seeded) → Phase 2 (moderated writes)
+A physical **outlet / map pin**. Holds location-specific facts only; its
+classification comes from its `brand`. Public reads published rows; writes via
+the approval path.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid pk | default `gen_random_uuid()` |
+| `brand_id` | uuid | **not null**, FK → `brands.id` — the brand this outlet is |
+| `name` | text null | optional branch label (defaults to the brand name) |
+| `location` | geography(Point,4326) | not null; PostGIS |
+| `address` | text | |
+| `postal_code` | text | |
+| `building` | text null | Building/mall the outlet sits in (e.g. "Bukit Panjang Plaza") — **group shops by building** (Phase 1, §6); seedable from OSM or by nearest-mall at pilot scale |
 | `osm_id` | text unique null | provenance if imported from OSM |
 | `data_source` | text | `osm` \| `datagovsg` \| `manual` \| `community` (origin of the pin) |
 | `status` | `business_status` | not null, default `published` |
 | `created_by` | uuid null | FK → `profiles.id` |
 | `created_at` | timestamptz | default now() |
 | `updated_at` | timestamptz | default now() |
+
+> **Brands workflow impact (Phase 2).** Because classification moved to `brands`,
+> the moderation model gains a target: a submission is either a **reclassify**
+> (targets a brand → writes `brands` + `edit_history`) or an **outlet edit / new
+> outlet** (targets a business). So `submissions` and `edit_history` each get a
+> nullable `brand_id` alongside `business_id` (exactly one set), and
+> `apply_submission` branches on which is present. A new outlet either references
+> an existing brand or creates one in the same transaction. (Detail to finalize
+> when Phase 2 UI is built.)
 
 ### Table: `submissions` — Phase 2 (the moderation queue)
 Users never edit `businesses` directly; they submit here and a moderator applies.
@@ -261,9 +323,11 @@ the rest of the schema stays out of PDPA scope.
   `*_source` = evidence for a *classification claim*.
 - **`business_stories` is isolated on purpose** — the only table holding PII,
   consent-gated, so the rest of the schema is PDPA-free.
-- **`businesses_public` view** (SQL migration 06) flattens `location` into
-  lat/lng and joins the subcategory label for the client; `security_invoker`
-  means it honours the base table's RLS.
+- **`businesses_public` view** flattens `location` into lat/lng and **joins the
+  brand** (name, independence, origin, category, subcategory) so the client gets
+  each outlet with its brand's classification in one row; `security_invoker`
+  means it honours the base tables' RLS. (The app currently reads the table +
+  brand directly and decodes EWKB client-side, so the view is optional.)
 
 ### Row-Level Security (enforced in DB, not just UI)
 Role comes from `profiles.role` (`contributor` | `moderator` | `admin`).
@@ -312,7 +376,18 @@ Seeding scripts live in `/scripts` and write to Supabase via the service key
 - Full-screen Leaflet map, tiles from MapTiler/Stadia (**not** raw OSM tiles).
 - Custom markers coloured/badged by classification.
 - Filters: independence, origin, category. "Only show classified" toggle.
-- Search by name; detail card (badges, category, source, last-updated).
+- **Search bar** — find a business by name (and by building, see below); selecting
+  a result flies the map to it and opens its card.
+- Detail card (badges, category, source, last-updated).
+- **"My location" button** — recentre the map on the user's current GPS position
+  (browser Geolocation API; graceful fallback if denied/unavailable).
+- **Group shops by building** — tenants that share a building (e.g. Bukit Panjang
+  Plaza vs Hillion Mall) collapse into a single **building marker** showing a
+  count; tapping it expands to the list of shops inside. Keeps dense malls
+  legible instead of a pile of overlapping pins. Building membership comes from
+  the `building` field (see §4); at pilot scale it can be derived from which mall
+  a point is nearest. (These three — search, locate, building grouping — were
+  added to scope 2026-09-04.)
 - Map opens centred on the Bukit Panjang malls but works island-wide (no shading/boundary).
 
 ### Phase 2 — Crowdsourcing
@@ -344,11 +419,17 @@ Toggleable behaviours live in one place (`src/config/features.ts`):
 ## 7. UX sketch
 
 **Main screen:** map fills the viewport. Top: search bar + filter chips
-(`🧍 Independent`, `🇸🇬 Local`, category). Bottom sheet slides up on marker tap.
+(`🧍 Independent`, `🇸🇬 Local`, category). A **"my location"** control (⌖) sits
+over the map to recentre on the user. Bottom sheet slides up on marker tap.
 
-**Marker legend:** colour = origin (green local / grey unverified / amber
-foreign); icon = category (fork = F&B, bag = retail, etc.); a small badge for
-independence.
+**Markers:** individual shops show colour = origin (green local / grey
+unverified / amber foreign); icon = category; a small badge for independence.
+Shops in the same **building** collapse into one **building marker** with a
+tenant count; tapping expands to the list of shops inside (so a mall reads as one
+pin, not fifty).
+
+**Search:** a name/building search; picking a result flies to it and opens the
+card (or the building's shop list).
 
 **Detail card:** name · category · two big badges · source line ("Classified by
 community, source: …, updated 2026-08") · "Report an error" · (Phase 4) owner
@@ -438,6 +519,10 @@ free hosted tier and later self-host **without rewriting the map**.
 - **[DECIDE later]** Editorial stance on a franchise's origin — a locally-owned
   franchisee of a foreign brand: `origin = local` or `foreign`? (Independence is
   always `franchise` regardless; this is purely an Axis-B question now.)
+- ~~Introduce a `brands` table?~~ → **✅ Standardized (2026-09): every business
+  belongs to a brand; classification lives on the brand.** Independent single
+  stores are brands with one outlet (§3, §4). Migration + backfill of the 67
+  seeded rows still to be applied.
 - ~~Anonymous flagging?~~ → **✅ Allowed for now**, behind the
   `allowAnonymousFlagging` feature flag so it can be disabled (§6.1).
 - ~~App name~~ → **Placeholder "StallOrigins"**, centralized in
