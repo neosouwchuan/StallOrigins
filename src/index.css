@@ -51,3 +51,13 @@ body {
 .leaflet-tooltip.bld-name::before {
   display: none;
 }
+
+/* Draft pin while proposing a new shop. */
+.draft-pin {
+  background: #16a34a;
+  border: 3px solid #fff;
+  border-radius: 50%;
+  box-sizing: border-box;
+  box-shadow: 0 1px 4px rgb(0 0 0 / 0.4);
+  cursor: move;
+}

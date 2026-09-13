@@ -7,6 +7,7 @@ import {
   Tooltip,
   Polygon,
   Marker,
+  useMapEvents,
 } from "react-leaflet";
 import L from "leaflet";
 import { getTileSource } from "./tileSource";
@@ -27,6 +28,13 @@ const VTX_ICON = L.divIcon({
   iconAnchor: [7, 7],
 });
 
+/** Draft pin for proposing a new shop (draggable to fine-tune). */
+const DRAFT_ICON = L.divIcon({
+  className: "draft-pin",
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
+
 interface MapViewProps {
   businesses: Business[];
   /** When set, cards show a "Suggest classification" action for signed-in users. */
@@ -36,6 +44,18 @@ interface MapViewProps {
   /** When set (admin boundary editing), render editable building polygons. */
   editBuildings?: BuildingShape[];
   onVertexDrag?: (buildingId: string, index: number, lat: number, lng: number) => void;
+  /** When placing a new shop: capture map clicks and show a draggable draft pin. */
+  placing?: boolean;
+  draftPin?: { lat: number; lng: number } | null;
+  onMapClick?: (lat: number, lng: number) => void;
+}
+
+/** Invisible helper: reports map clicks while in placement mode. */
+function ClickCatcher({ onClick }: { onClick: (lat: number, lng: number) => void }) {
+  useMapEvents({
+    click: (e) => onClick(e.latlng.lat, e.latlng.lng),
+  });
+  return null;
 }
 
 interface BuildingGroup {
@@ -76,6 +96,9 @@ export default function MapView({
   groupByBuilding,
   editBuildings,
   onVertexDrag,
+  placing,
+  draftPin,
+  onMapClick,
 }: MapViewProps) {
   const tiles = useMemo(() => getTileSource(), []);
   const grouped = useMemo(() => groupBusinesses(businesses), [businesses]);
@@ -93,6 +116,22 @@ export default function MapView({
           url={tiles.url}
           attribution={tiles.attribution}
           maxZoom={tiles.maxZoom}
+        />
+      )}
+
+      {/* New-shop placement: capture clicks + show a draggable draft pin */}
+      {placing && onMapClick && <ClickCatcher onClick={onMapClick} />}
+      {placing && draftPin && (
+        <Marker
+          position={[draftPin.lat, draftPin.lng]}
+          draggable
+          icon={DRAFT_ICON}
+          eventHandlers={{
+            dragend: (e) => {
+              const ll = (e.target as L.Marker).getLatLng();
+              onMapClick?.(ll.lat, ll.lng);
+            },
+          }}
         />
       )}
 

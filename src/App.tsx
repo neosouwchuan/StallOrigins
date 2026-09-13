@@ -14,6 +14,7 @@ import {
 import { SAMPLE_BUSINESSES } from "./data/sampleBusinesses";
 import { AuthBar } from "./components/AuthBar";
 import { ClassifyForm } from "./components/ClassifyForm";
+import { ProposeForm } from "./components/ProposeForm";
 import { Sidebar } from "./components/Sidebar";
 import {
   type Business,
@@ -47,6 +48,12 @@ export default function App() {
     null,
   );
   const [savingBuildings, setSavingBuildings] = useState(false);
+  // New-shop proposal flow: place a pin, then fill the form.
+  const [proposing, setProposing] = useState(false);
+  const [draftPin, setDraftPin] = useState<{ lat: number; lng: number } | null>(
+    null,
+  );
+  const [proposeFormOpen, setProposeFormOpen] = useState(false);
   const isAdmin = auth.profile?.role === "admin";
 
   const load = useCallback(() => {
@@ -84,11 +91,26 @@ export default function App() {
 
   async function startEditBuildings() {
     setGroupByBuilding(false);
+    cancelPropose();
     try {
       setEditBuildings(await fetchBuildings());
     } catch (e) {
       flash(e instanceof Error ? e.message : "Couldn’t load buildings");
     }
+  }
+
+  function startPropose() {
+    setEditBuildings(null);
+    setGroupByBuilding(false);
+    setDraftPin(null);
+    setProposeFormOpen(false);
+    setProposing(true);
+  }
+
+  function cancelPropose() {
+    setProposing(false);
+    setDraftPin(null);
+    setProposeFormOpen(false);
   }
 
   function onVertexDrag(id: string, i: number, lat: number, lng: number) {
@@ -181,6 +203,14 @@ export default function App() {
             >
               🏬 Group by building
             </Chip>
+            {auth.session && (
+              <Chip
+                active={proposing}
+                onClick={() => (proposing ? cancelPropose() : startPropose())}
+              >
+                ➕ Propose a shop
+              </Chip>
+            )}
             {isAdmin && (
               <Chip
                 active={!!editBuildings}
@@ -200,6 +230,9 @@ export default function App() {
         groupByBuilding={groupByBuilding}
         editBuildings={editBuildings ?? undefined}
         onVertexDrag={onVertexDrag}
+        placing={proposing}
+        draftPin={draftPin}
+        onMapClick={(lat, lng) => setDraftPin({ lat, lng })}
         onClassify={auth.session ? (b) => setClassifyTarget(b) : undefined}
       />
 
@@ -224,7 +257,43 @@ export default function App() {
         </div>
       )}
 
+      {proposing && !proposeFormOpen && (
+        <div className="absolute bottom-3 left-1/2 z-[1500] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-3 py-1.5 shadow-lg ring-1 ring-black/5">
+          <span className="text-[11px] text-slate-500">
+            {draftPin
+              ? "Pin placed — drag to adjust, or continue"
+              : "Tap the map to place the shop"}
+          </span>
+          {draftPin && (
+            <button
+              onClick={() => setProposeFormOpen(true)}
+              className="rounded bg-green-700 px-3 py-1 text-[12px] font-medium text-white"
+            >
+              Continue
+            </button>
+          )}
+          <button
+            onClick={cancelPropose}
+            className="rounded px-2 py-1 text-[12px] text-slate-500 hover:bg-slate-100"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
+
       {/* Modals */}
+      {proposeFormOpen && draftPin && auth.session && (
+        <ProposeForm
+          userId={auth.session.user.id}
+          pin={draftPin}
+          onBack={() => setProposeFormOpen(false)}
+          onClose={cancelPropose}
+          onDone={() => {
+            cancelPropose();
+            flash("Shop proposed for review — thanks!");
+          }}
+        />
+      )}
       {classifyTarget && auth.session && (
         <ClassifyForm
           business={classifyTarget}

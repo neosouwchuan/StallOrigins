@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import type { Independence } from "../domain/classification";
+import type { Category, Independence } from "../domain/classification";
 
 export interface ClassifyInput {
   brandId: string;
@@ -30,6 +30,49 @@ export async function submitClassification(
   const { error } = await supabase.from("submissions").insert({
     brand_id: input.brandId,
     kind: "edit",
+    payload,
+    source: input.source,
+    submitted_by: userId,
+  });
+  if (error) throw new Error(error.message);
+}
+
+export interface NewShopInput {
+  /** Outlet (shop) name. */
+  name: string;
+  /** Existing brand's exact name to attach to, or a new brand name to create. */
+  brandName: string;
+  /** Category for the brand — only used when a new brand is created. */
+  category: Category;
+  lat: number;
+  lng: number;
+  address?: string;
+  source: string;
+}
+
+/**
+ * Propose a NEW shop — inserts a pending `submissions` row (kind 'new').
+ * On approval, apply_submission() resolves the brand by name (creating it if it
+ * doesn't exist) and creates the outlet. Classification stays unverified until
+ * someone proposes it via the classify flow.
+ */
+export async function submitNewShop(
+  userId: string,
+  input: NewShopInput,
+): Promise<void> {
+  if (!supabase) throw new Error("Supabase not configured");
+  const payload: Record<string, unknown> = {
+    name: input.name,
+    brand_name: input.brandName,
+    category: input.category,
+    lat: input.lat,
+    lng: input.lng,
+    data_source: "community",
+  };
+  if (input.address?.trim()) payload.address = input.address.trim();
+
+  const { error } = await supabase.from("submissions").insert({
+    kind: "new",
     payload,
     source: input.source,
     submitted_by: userId,
