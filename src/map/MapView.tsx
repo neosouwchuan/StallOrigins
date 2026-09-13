@@ -1,7 +1,17 @@
 import { useMemo } from "react";
-import { MapContainer, TileLayer, CircleMarker, Popup } from "react-leaflet";
+import {
+  MapContainer,
+  TileLayer,
+  CircleMarker,
+  Popup,
+  Tooltip,
+  Polygon,
+  Marker,
+} from "react-leaflet";
+import L from "leaflet";
 import { getTileSource } from "./tileSource";
 import { PILOT } from "../config/pilot";
+import type { BuildingShape } from "../data/buildings";
 import {
   type Business,
   INDEPENDENCE_META,
@@ -10,14 +20,66 @@ import {
   flagEmoji,
 } from "../domain/classification";
 
+/** Small draggable handle for editing polygon vertices (no image needed). */
+const VTX_ICON = L.divIcon({
+  className: "vtx-handle",
+  iconSize: [14, 14],
+  iconAnchor: [7, 7],
+});
+
 interface MapViewProps {
   businesses: Business[];
   /** When set, cards show a "Suggest classification" action for signed-in users. */
   onClassify?: (b: Business) => void;
+  /** Collapse each building's stalls into one marker. */
+  groupByBuilding?: boolean;
+  /** When set (admin boundary editing), render editable building polygons. */
+  editBuildings?: BuildingShape[];
+  onVertexDrag?: (buildingId: string, index: number, lat: number, lng: number) => void;
 }
 
-export default function MapView({ businesses, onClassify }: MapViewProps) {
+interface BuildingGroup {
+  id: string;
+  name: string;
+  center: [number, number];
+  members: Business[];
+}
+
+/** Split businesses into building groups (by building.id) and ungrouped pins. */
+function groupBusinesses(businesses: Business[]): {
+  groups: BuildingGroup[];
+  ungrouped: Business[];
+} {
+  const byBuilding = new Map<string, Business[]>();
+  const ungrouped: Business[] = [];
+  for (const b of businesses) {
+    if (b.building) {
+      const arr = byBuilding.get(b.building.id) ?? [];
+      arr.push(b);
+      byBuilding.set(b.building.id, arr);
+    } else {
+      ungrouped.push(b);
+    }
+  }
+  const groups: BuildingGroup[] = [];
+  for (const [id, members] of byBuilding) {
+    const lat = members.reduce((s, m) => s + m.lat, 0) / members.length;
+    const lng = members.reduce((s, m) => s + m.lng, 0) / members.length;
+    groups.push({ id, name: members[0].building!.name, center: [lat, lng], members });
+  }
+  return { groups, ungrouped };
+}
+
+export default function MapView({
+  businesses,
+  onClassify,
+  groupByBuilding,
+  editBuildings,
+  onVertexDrag,
+}: MapViewProps) {
   const tiles = useMemo(() => getTileSource(), []);
+  const grouped = useMemo(() => groupBusinesses(businesses), [businesses]);
+  const editing = !!editBuildings;
 
   return (
     <MapContainer
@@ -34,24 +96,167 @@ export default function MapView({ businesses, onClassify }: MapViewProps) {
         />
       )}
 
-      {businesses.map((b) => (
-        <CircleMarker
-          key={b.id}
-          center={[b.lat, b.lng]}
-          radius={9}
-          pathOptions={{
-            color: "#ffffff",
-            weight: 2,
-            fillColor: originColor(b.origin),
-            fillOpacity: 0.95,
-          }}
-        >
-          <Popup>
-            <BusinessCard business={b} onClassify={onClassify} />
-          </Popup>
-        </CircleMarker>
+      {/* Admin boundary editor overlay */}
+      {editBuildings?.map((bld) => (
+        <BuildingEditShape
+          key={bld.id}
+          bld={bld}
+          onVertexDrag={onVertexDrag}
+        />
       ))}
+
+      {editing ? (
+        // While editing, show plain reference pins (no grouping, no popups).
+        businesses.map((b) => (
+          <CircleMarker
+            key={b.id}
+            center={[b.lat, b.lng]}
+            radius={5}
+            pathOptions={{
+              color: "#ffffff",
+              weight: 1,
+              fillColor: originColor(b.origin),
+              fillOpacity: 0.7,
+            }}
+          />
+        ))
+      ) : groupByBuilding ? (
+        <>
+          {grouped.groups.map((g) => (
+            <CircleMarker
+              key={g.id}
+              center={g.center}
+              radius={15}
+              pathOptions={{
+                color: "#ffffff",
+                weight: 2,
+                fillColor: "#0f766e",
+                fillOpacity: 0.92,
+              }}
+            >
+              <Tooltip permanent direction="center" className="bld-count">
+                {g.members.length}
+              </Tooltip>
+              <Popup>
+                <BuildingCard
+                  name={g.name}
+                  members={g.members}
+                  onClassify={onClassify}
+                />
+              </Popup>
+            </CircleMarker>
+          ))}
+          {grouped.ungrouped.map((b) => (
+            <OutletMarker key={b.id} b={b} onClassify={onClassify} />
+          ))}
+        </>
+      ) : (
+        businesses.map((b) => (
+          <OutletMarker key={b.id} b={b} onClassify={onClassify} />
+        ))
+      )}
     </MapContainer>
+  );
+}
+
+function OutletMarker({
+  b,
+  onClassify,
+}: {
+  b: Business;
+  onClassify?: (b: Business) => void;
+}) {
+  return (
+    <CircleMarker
+      center={[b.lat, b.lng]}
+      radius={9}
+      pathOptions={{
+        color: "#ffffff",
+        weight: 2,
+        fillColor: originColor(b.origin),
+        fillOpacity: 0.95,
+      }}
+    >
+      <Popup>
+        <BusinessCard business={b} onClassify={onClassify} />
+      </Popup>
+    </CircleMarker>
+  );
+}
+
+function BuildingEditShape({
+  bld,
+  onVertexDrag,
+}: {
+  bld: BuildingShape;
+  onVertexDrag?: (id: string, i: number, lat: number, lng: number) => void;
+}) {
+  return (
+    <>
+      <Polygon
+        positions={bld.coords}
+        pathOptions={{
+          color: "#7c3aed",
+          weight: 2,
+          fillColor: "#7c3aed",
+          fillOpacity: 0.08,
+        }}
+      >
+        <Tooltip permanent direction="center" className="bld-name">
+          {bld.name}
+        </Tooltip>
+      </Polygon>
+      {bld.coords.map((pos, i) => (
+        <Marker
+          key={i}
+          position={pos}
+          draggable
+          icon={VTX_ICON}
+          eventHandlers={{
+            drag: (e) => {
+              const ll = (e.target as L.Marker).getLatLng();
+              onVertexDrag?.(bld.id, i, ll.lat, ll.lng);
+            },
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+function BuildingCard({
+  name,
+  members,
+  onClassify,
+}: {
+  name: string;
+  members: Business[];
+  onClassify?: (b: Business) => void;
+}) {
+  const sg = members.filter((m) => m.origin?.code === "SG").length;
+  return (
+    <div className="min-w-[220px] space-y-2">
+      <div className="text-sm font-semibold text-slate-900">🏬 {name}</div>
+      <div className="text-[11px] text-slate-500">
+        {members.length} stalls · {sg} Singaporean-owned
+      </div>
+      <ul className="max-h-40 space-y-1 overflow-auto">
+        {members.map((m) => (
+          <li key={m.id} className="flex items-center gap-1 text-[12px]">
+            <span>{m.origin ? flagEmoji(m.origin.code) : "❔"}</span>
+            <span className="truncate text-slate-700">{m.name}</span>
+            {onClassify && m.brandId && (
+              <button
+                onClick={() => onClassify(m)}
+                className="ml-auto shrink-0 text-[10px] text-green-700 hover:underline"
+              >
+                classify
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -73,6 +278,7 @@ function BusinessCard({
       <div className="text-xs text-slate-500">
         {cat.emoji} {cat.label}
         {b.subcategory ? ` · ${b.subcategory.replace(/_/g, " ")}` : ""}
+        {b.building ? ` · ${b.building.name}` : ""}
       </div>
       <div className="flex flex-wrap gap-1">
         <Badge>{`${ind.emoji} ${ind.label}`}</Badge>

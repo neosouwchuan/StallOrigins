@@ -223,6 +223,17 @@ picker and the `businesses_public` join. Flags are computed from the code.
 | `code` | text pk | ISO 3166-1 alpha-2 (e.g. `SG`, `US`) |
 | `name` | text | English name |
 
+### Table: `buildings` — Phase 1/2 (migration 10)
+A building (a **mall**, for now) is a boundary **polygon**. A stall belongs to the
+building whose polygon covers its location (spatial containment via `ST_Covers`);
+this drives group-by-building (§6). Public read; admin write.
+| Column | Type | Notes |
+|---|---|---|
+| `id` | uuid pk | |
+| `name` | text | e.g. "Bukit Panjang Plaza" |
+| `kind` | text | default `mall` (only malls for now) |
+| `boundary` | geography(Polygon,4326) | sequential coordinates forming the footprint |
+
 ### Table: `businesses` (outlets) — Phase 1 (seeded) → Phase 2 (moderated writes)
 A physical **outlet / map pin**. Holds location-specific facts only; its
 classification comes from its `brand`. Public reads published rows; writes via
@@ -235,7 +246,7 @@ the approval path.
 | `location` | geography(Point,4326) | not null; PostGIS |
 | `address` | text | |
 | `postal_code` | text | |
-| `building` | text null | Building/mall the outlet sits in (e.g. "Bukit Panjang Plaza") — **group shops by building** (Phase 1, §6). Added in migration 07; the seeder sets it by nearest-mall |
+| `building_id` | uuid null | FK → `buildings.id` — the building whose polygon covers this outlet. **Derived** by a trigger (`set_building_id`) from `location`; null = not inside any building. Migration 10 |
 | `osm_id` | text unique null | provenance if imported from OSM |
 | `data_source` | text | `osm` \| `datagovsg` \| `manual` \| `community` (origin of the pin) |
 | `status` | `business_status` | not null, default `published` |

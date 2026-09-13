@@ -5,6 +5,12 @@ import { isUsingDevTiles } from "./map/tileSource";
 import { isSupabaseConfigured } from "./lib/supabase";
 import { useSession } from "./lib/useSession";
 import { fetchBusinesses } from "./data/businesses";
+import {
+  fetchBuildings,
+  saveBuildingBoundary,
+  recomputeMembership,
+  type BuildingShape,
+} from "./data/buildings";
 import { SAMPLE_BUSINESSES } from "./data/sampleBusinesses";
 import { AuthBar } from "./components/AuthBar";
 import { ClassifyForm } from "./components/ClassifyForm";
@@ -27,6 +33,7 @@ export default function App() {
     new Set(CATEGORIES),
   );
   const [origins, setOrigins] = useState<Set<OriginCoarse>>(new Set(ORIGINS));
+  const [groupByBuilding, setGroupByBuilding] = useState(false);
 
   const [businesses, setBusinesses] = useState<Business[]>(
     isSupabaseConfigured ? [] : SAMPLE_BUSINESSES,
@@ -36,6 +43,11 @@ export default function App() {
   const [classifyTarget, setClassifyTarget] = useState<Business | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [editBuildings, setEditBuildings] = useState<BuildingShape[] | null>(
+    null,
+  );
+  const [savingBuildings, setSavingBuildings] = useState(false);
+  const isAdmin = auth.profile?.role === "admin";
 
   const load = useCallback(() => {
     if (!isSupabaseConfigured) return;
@@ -68,6 +80,47 @@ export default function App() {
   function flash(msg: string) {
     setToast(msg);
     setTimeout(() => setToast(null), 3500);
+  }
+
+  async function startEditBuildings() {
+    setGroupByBuilding(false);
+    try {
+      setEditBuildings(await fetchBuildings());
+    } catch (e) {
+      flash(e instanceof Error ? e.message : "Couldn’t load buildings");
+    }
+  }
+
+  function onVertexDrag(id: string, i: number, lat: number, lng: number) {
+    setEditBuildings(
+      (bs) =>
+        bs?.map((b) =>
+          b.id === id
+            ? {
+                ...b,
+                coords: b.coords.map((c, idx) =>
+                  idx === i ? ([lat, lng] as [number, number]) : c,
+                ),
+              }
+            : b,
+        ) ?? null,
+    );
+  }
+
+  async function saveBuildings() {
+    if (!editBuildings) return;
+    setSavingBuildings(true);
+    try {
+      for (const b of editBuildings) await saveBuildingBoundary(b.id, b.coords);
+      await recomputeMembership();
+      load();
+      setEditBuildings(null);
+      flash("Boundaries saved.");
+    } catch (e) {
+      flash(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSavingBuildings(false);
+    }
   }
 
   return (
@@ -121,14 +174,55 @@ export default function App() {
                 {ORIGIN_COARSE_META[o].emoji} {ORIGIN_COARSE_META[o].label}
               </Chip>
             ))}
+            <span className="mx-1 self-center text-slate-300">|</span>
+            <Chip
+              active={groupByBuilding}
+              onClick={() => setGroupByBuilding((v) => !v)}
+            >
+              🏬 Group by building
+            </Chip>
+            {isAdmin && (
+              <Chip
+                active={!!editBuildings}
+                onClick={() =>
+                  editBuildings ? setEditBuildings(null) : startEditBuildings()
+                }
+              >
+                ✏️ Edit buildings
+              </Chip>
+            )}
           </div>
         </div>
       </header>
 
       <MapView
         businesses={filtered}
+        groupByBuilding={groupByBuilding}
+        editBuildings={editBuildings ?? undefined}
+        onVertexDrag={onVertexDrag}
         onClassify={auth.session ? (b) => setClassifyTarget(b) : undefined}
       />
+
+      {editBuildings && (
+        <div className="absolute bottom-3 left-1/2 z-[1500] flex -translate-x-1/2 items-center gap-2 rounded-full bg-white px-3 py-1.5 shadow-lg ring-1 ring-black/5">
+          <span className="text-[11px] text-slate-500">
+            Drag the handles to reshape
+          </span>
+          <button
+            onClick={saveBuildings}
+            disabled={savingBuildings}
+            className="rounded bg-green-700 px-3 py-1 text-[12px] font-medium text-white disabled:opacity-50"
+          >
+            {savingBuildings ? "Saving…" : "Save"}
+          </button>
+          <button
+            onClick={() => setEditBuildings(null)}
+            className="rounded px-2 py-1 text-[12px] text-slate-500 hover:bg-slate-100"
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       {/* Modals */}
       {classifyTarget && auth.session && (

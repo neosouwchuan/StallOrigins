@@ -91,8 +91,8 @@ export interface Business {
   lat: number;
   lng: number;
   address?: string;
-  /** Building/mall the outlet sits in (for group-by-building). */
-  building?: string;
+  /** Building/mall the outlet sits in (for group-by-building); undefined = none. */
+  building?: { id: string; name: string };
   category: Category;
   subcategory?: string;
   independence: Independence;

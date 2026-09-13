@@ -16,3 +16,38 @@ body {
 .leaflet-popup-content {
   margin: 12px;
 }
+
+/* Building-group marker: show the stall count centred on the circle. */
+.leaflet-tooltip.bld-count {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+}
+.leaflet-tooltip.bld-count::before {
+  display: none;
+}
+
+/* Admin boundary editor: draggable vertex handle + building name label. */
+.vtx-handle {
+  background: #fff;
+  border: 2px solid #7c3aed;
+  border-radius: 50%;
+  box-sizing: border-box;
+  cursor: move;
+}
+.leaflet-tooltip.bld-name {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  color: #6d28d9;
+  font-weight: 600;
+  font-size: 11px;
+}
+.leaflet-tooltip.bld-name::before {
+  display: none;
+}

@@ -15,12 +15,7 @@
  */
 import { readFileSync } from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import {
-  PILOT,
-  pilotBboxString,
-  isInPilotArea,
-  nearestBuilding,
-} from "../src/config/pilot.ts";
+import { PILOT, pilotBboxString, isInPilotArea } from "../src/config/pilot.ts";
 
 const DRY_RUN = process.argv.includes("--dry-run");
 
@@ -111,7 +106,6 @@ interface OutletRow {
   location: string; // EWKT geography
   address: string | null;
   postal_code: string | null;
-  building: string;
   osm_id: string;
   data_source: "osm";
 }
@@ -184,7 +178,6 @@ function extract(elements: OverpassEl[]): { brands: BrandRow[]; outlets: OutletR
       location: `SRID=4326;POINT(${lng} ${lat})`,
       address: addr || null,
       postal_code: t["addr:postcode"] ?? null,
-      building: nearestBuilding(lat, lng),
       osm_id,
       data_source: "osm",
     });
@@ -203,7 +196,7 @@ async function main() {
     `Overpass returned ${elements.length} elements → ${brands.length} brands, ${outlets.length} outlets.`,
   );
   for (const o of outlets) {
-    console.log(`  • ${o.brand_name}  [${o.building}]  ${o.osm_id}`);
+    console.log(`  • ${o.brand_name}  ${o.osm_id}`);
   }
 
   if (DRY_RUN) {
@@ -244,7 +237,6 @@ async function main() {
     location: o.location,
     address: o.address,
     postal_code: o.postal_code,
-    building: o.building,
     osm_id: o.osm_id,
     data_source: o.data_source,
   }));
