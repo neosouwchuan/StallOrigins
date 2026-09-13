@@ -7,7 +7,6 @@
 // in `Origin` — never mix the two axes.
 export type Independence =
   | "independent"
-  | "chain_small"
   | "chain"
   | "franchise"
   | "unverified";
@@ -42,15 +41,10 @@ export const INDEPENDENCE_META: Record<
     emoji: "🧍",
     description: "Single owner-operated outlet",
   },
-  chain_small: {
-    label: "Small chain",
-    emoji: "🏘️",
-    description: "2–5 outlets",
-  },
   chain: {
     label: "Chain",
     emoji: "🏢",
-    description: "Large chain (>5 outlets)",
+    description: "A chain — multiple outlets",
   },
   franchise: {
     label: "Franchise",

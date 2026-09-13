@@ -8,7 +8,7 @@ set search_path = public, extensions;
 insert into public.brands (name, category, subcategory_id, independence, origin_country, independence_source, origin_source)
 values
   ('Kopitiam food court stall',   'fnb',      'hawker_stall', 'independent', 'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),
-  ('Neighbourhood minimart',      'retail',   'minimart',     'chain_small', 'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),
+  ('Neighbourhood minimart',      'retail',   'minimart',     'chain',       'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),
   ('International fast-food outlet','fnb',     'restaurant',   'franchise',   'US', 'Seed data (illustrative)', 'Seed data (illustrative)'),
   ('Indie bubble tea stall',      'fnb',      'cafe',         'unverified',  null, null, null),
   ('Neighbourhood barber',        'services', 'barber',       'independent', 'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),

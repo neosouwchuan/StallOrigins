@@ -27,7 +27,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     address: "Bukit Panjang Plaza",
     category: "retail",
     subcategory: "minimart",
-    independence: "chain_small",
+    independence: "chain",
     origin: { code: "SG", name: "Singapore" },
     updatedAt: "2026-09-04",
   },

@@ -9,7 +9,7 @@ import {
   flagEmoji,
 } from "../domain/classification";
 
-const INDEP: Independence[] = ["independent", "chain_small", "chain", "franchise"];
+const INDEP: Independence[] = ["independent", "chain", "franchise"];
 
 interface Props {
   business: Business;

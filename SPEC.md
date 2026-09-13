@@ -71,8 +71,7 @@ This axis says nothing about local vs foreign — that is entirely Axis B's job.
 | Code | Label | Definition |
 |---|---|---|
 | `independent` | 🧍 Independent | Single owner-operated outlet |
-| `chain_small` | 🏘️ Small chain | 2–5 outlets |
-| `chain` | 🏢 Chain | Large chain (>5 outlets) |
+| `chain` | 🏢 Chain | Multiple outlets (small or large — merged, migration 09) |
 | `franchise` | 🔗 Franchise | Operates under a licensed brand (origin shown separately) |
 | `unverified` | ❔ Unverified | Not yet classified |
 
@@ -154,7 +153,7 @@ Modelled as Postgres `enum`s so invalid values are impossible at the DB level.
 
 | Enum | Values |
 |---|---|
-| `independence_level` | `independent`, `chain_small`, `chain`, `franchise`, `unverified` (structure/scale only — no local/foreign here) |
+| `independence_level` | `independent`, `chain`, `franchise`, `unverified` (structure only; `chain_small` retired into `chain` in migration 09 but kept as an unused enum value) |
 | ~~`origin_level`~~ | Removed in migration 08 — origin is now a FK to the `countries` table (`brands.origin_country`), not an enum |
 | `business_category` | `fnb`, `retail`, `services` |
 | `business_status` | `published`, `hidden` |

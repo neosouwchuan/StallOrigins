@@ -5,6 +5,11 @@ import type {
   Independence,
 } from "../domain/classification";
 
+/** Fold the retired `chain_small` value into `chain` (defensive). */
+function normIndep(i: string): Independence {
+  return i === "chain_small" ? "chain" : (i as Independence);
+}
+
 /**
  * An outlet row with its brand embedded. Classification lives on the brand;
  * origin is the brand's country (via the `origin_country` FK to `countries`).
@@ -71,7 +76,7 @@ function outletToBusiness(r: OutletRow): Business {
     building: r.building ?? undefined,
     category: b.category,
     subcategory: b.subcategory_id ?? undefined,
-    independence: b.independence,
+    independence: normIndep(b.independence),
     origin: country ? { code: country.code, name: country.name } : undefined,
     independenceSource: b.independence_source ?? undefined,
     originSource: b.origin_source ?? undefined,
@@ -142,7 +147,7 @@ async function fetchLegacy(): Promise<Business[]> {
       building: r.building ?? undefined,
       category: b.category,
       subcategory: b.subcategory_id ?? undefined,
-      independence: b.independence,
+      independence: normIndep(b.independence),
       origin: sg ? { code: "SG", name: "Singapore" } : undefined,
       independenceSource: b.independence_source ?? undefined,
       originSource: b.origin_source ?? undefined,
