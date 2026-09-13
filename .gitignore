@@ -12,3 +12,6 @@ dist-ssr
 .idea
 .DS_Store
 *.log
+
+# TypeScript incremental build cache
+*.tsbuildinfo
