@@ -12,6 +12,7 @@ filename order.
 | 05 | `20260904120400_reference_data.sql` | Feature-flag defaults + subcategory lookup |
 | 06 | `20260904120500_views.sql` | `businesses_public` read view (flat lat/lng + labels) |
 | 07 | `20260913120000_brands.sql` | **Standardize on brands** — new `brands` table holds classification; `businesses` become outlets with `brand_id`; backfills existing rows (dedupe by name); adds `building`; brand-aware `apply_submission`; rebuilds the view with a brand join |
+| 08 | `20260913130000_origin_countries.sql` | **Origin by country** — adds the `countries` reference table (ISO 3166-1), replaces `brands.origin` enum with `origin_country` FK (auto-migrates `local`→`SG`), rebuilds the view + `apply_submission` |
 | — | `seed.sql` | DEV-only sample brands + outlets (loaded by `supabase db reset`) |
 
 ## Running locally

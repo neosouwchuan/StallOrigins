@@ -4,15 +4,15 @@
 -- Hillion Mall. NOT verified data.
 set search_path = public, extensions;
 
--- Brands (identity + classification). One brand per store here.
-insert into public.brands (name, category, subcategory_id, independence, origin, independence_source, origin_source)
+-- Brands (identity + classification). origin_country is an ISO code (null = unverified).
+insert into public.brands (name, category, subcategory_id, independence, origin_country, independence_source, origin_source)
 values
-  ('Kopitiam food court stall',   'fnb',      'hawker_stall', 'independent', 'local',      'Seed data (illustrative)', 'Seed data (illustrative)'),
-  ('Neighbourhood minimart',      'retail',   'minimart',     'chain_small', 'local',      'Seed data (illustrative)', 'Seed data (illustrative)'),
-  ('International fast-food outlet','fnb',     'restaurant',   'franchise',   'foreign',    'Seed data (illustrative)', 'Seed data (illustrative)'),
-  ('Indie bubble tea stall',      'fnb',      'cafe',         'unverified',  'unverified', null, null),
-  ('Neighbourhood barber',        'services', 'barber',       'independent', 'local',      'Seed data (illustrative)', 'Seed data (illustrative)'),
-  ('Local bakery chain',          'fnb',      'bakery',       'chain',       'local',      'Seed data (illustrative)', 'Seed data (illustrative)')
+  ('Kopitiam food court stall',   'fnb',      'hawker_stall', 'independent', 'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),
+  ('Neighbourhood minimart',      'retail',   'minimart',     'chain_small', 'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),
+  ('International fast-food outlet','fnb',     'restaurant',   'franchise',   'US', 'Seed data (illustrative)', 'Seed data (illustrative)'),
+  ('Indie bubble tea stall',      'fnb',      'cafe',         'unverified',  null, null, null),
+  ('Neighbourhood barber',        'services', 'barber',       'independent', 'SG', 'Seed data (illustrative)', 'Seed data (illustrative)'),
+  ('Local bakery chain',          'fnb',      'bakery',       'chain',       'SG', 'Seed data (illustrative)', 'Seed data (illustrative)')
 on conflict (name) do nothing;
 
 -- Outlets (reference the brand by name; outlet `name` left null → defaults to brand name).

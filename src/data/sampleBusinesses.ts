@@ -16,7 +16,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     category: "fnb",
     subcategory: "hawker_stall",
     independence: "independent",
-    origin: "local",
+    origin: { code: "SG", name: "Singapore" },
     updatedAt: "2026-09-04",
   },
   {
@@ -28,7 +28,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     category: "retail",
     subcategory: "minimart",
     independence: "chain_small",
-    origin: "local",
+    origin: { code: "SG", name: "Singapore" },
     updatedAt: "2026-09-04",
   },
   {
@@ -40,7 +40,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     category: "fnb",
     subcategory: "restaurant",
     independence: "franchise",
-    origin: "foreign",
+    origin: { code: "US", name: "United States" },
     updatedAt: "2026-09-04",
   },
   {
@@ -52,7 +52,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     category: "fnb",
     subcategory: "cafe",
     independence: "independent",
-    origin: "unverified",
+    // origin omitted → unverified
   },
   {
     id: "sample-5",
@@ -63,7 +63,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     category: "services",
     subcategory: "barber",
     independence: "independent",
-    origin: "local",
+    origin: { code: "SG", name: "Singapore" },
     updatedAt: "2026-09-04",
   },
   {
@@ -75,7 +75,7 @@ export const SAMPLE_BUSINESSES: Business[] = [
     category: "fnb",
     subcategory: "bakery",
     independence: "chain",
-    origin: "local",
+    origin: { code: "SG", name: "Singapore" },
     updatedAt: "2026-09-04",
   },
 ];

@@ -5,16 +5,18 @@ import { PILOT } from "../config/pilot";
 import {
   type Business,
   INDEPENDENCE_META,
-  ORIGIN_META,
   CATEGORY_META,
   originColor,
+  flagEmoji,
 } from "../domain/classification";
 
 interface MapViewProps {
   businesses: Business[];
+  /** When set, cards show a "Suggest classification" action for signed-in users. */
+  onClassify?: (b: Business) => void;
 }
 
-export default function MapView({ businesses }: MapViewProps) {
+export default function MapView({ businesses, onClassify }: MapViewProps) {
   const tiles = useMemo(() => getTileSource(), []);
 
   return (
@@ -45,7 +47,7 @@ export default function MapView({ businesses }: MapViewProps) {
           }}
         >
           <Popup>
-            <BusinessCard business={b} />
+            <BusinessCard business={b} onClassify={onClassify} />
           </Popup>
         </CircleMarker>
       ))}
@@ -53,9 +55,17 @@ export default function MapView({ businesses }: MapViewProps) {
   );
 }
 
-function BusinessCard({ business: b }: { business: Business }) {
+function BusinessCard({
+  business: b,
+  onClassify,
+}: {
+  business: Business;
+  onClassify?: (b: Business) => void;
+}) {
   const ind = INDEPENDENCE_META[b.independence];
-  const org = ORIGIN_META[b.origin];
+  const originLabel = b.origin
+    ? `${flagEmoji(b.origin.code)} ${b.origin.name}`
+    : "❔ Unverified";
   const cat = CATEGORY_META[b.category];
   return (
     <div className="min-w-[200px] space-y-2">
@@ -66,13 +76,21 @@ function BusinessCard({ business: b }: { business: Business }) {
       </div>
       <div className="flex flex-wrap gap-1">
         <Badge>{`${ind.emoji} ${ind.label}`}</Badge>
-        <Badge>{`${org.emoji} ${org.label}`}</Badge>
+        <Badge>{originLabel}</Badge>
       </div>
       <div className="text-[11px] leading-tight text-slate-400">
         {b.updatedAt
           ? `Updated ${b.updatedAt}`
           : "Not yet classified — help verify this"}
       </div>
+      {onClassify && b.brandId && (
+        <button
+          onClick={() => onClassify(b)}
+          className="w-full rounded bg-green-50 px-2 py-1 text-[11px] font-medium text-green-800 hover:bg-green-100"
+        >
+          Suggest classification
+        </button>
+      )}
     </div>
   );
 }

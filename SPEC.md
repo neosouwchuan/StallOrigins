@@ -76,12 +76,15 @@ This axis says nothing about local vs foreign — that is entirely Axis B's job.
 | `franchise` | 🔗 Franchise | Operates under a licensed brand (origin shown separately) |
 | `unverified` | ❔ Unverified | Not yet classified |
 
-### Axis B — Ownership origin
-| Code | Label | Definition |
-|---|---|---|
-| `local` | 🇸🇬 Local | Majority Singaporean beneficial ownership |
-| `foreign` | 🌍 Foreign | Majority foreign ownership / overseas parent |
-| `unverified` | ❔ Unverified | Not yet classified |
+### Axis B — Ownership origin (by COUNTRY)
+Origin is the **country of ownership**, chosen from the official `countries`
+list (ISO 3166-1 alpha-2; all ~249 countries, seeded in migration 08). It's a
+FK `brands.origin_country`; **`SG` is the buy-local signal**, and **null =
+unverified**. The classify form is a type-to-search picker whose final value
+must come from the list (no free text). The map filter stays a coarse
+🇸🇬 Singaporean / 🌍 Foreign / ❔ Unverified split (Singaporean = `SG`, Foreign =
+any other code, Unverified = null), while each pin card shows the specific flag +
+country name. Flags are computed from the code, not stored.
 
 ### Published classification criteria (must be public in-app)
 Because "local vs foreign" is contentious, the rules must be transparent and
@@ -152,7 +155,7 @@ Modelled as Postgres `enum`s so invalid values are impossible at the DB level.
 | Enum | Values |
 |---|---|
 | `independence_level` | `independent`, `chain_small`, `chain`, `franchise`, `unverified` (structure/scale only — no local/foreign here) |
-| `origin_level` | `local`, `foreign`, `unverified` |
+| ~~`origin_level`~~ | Removed in migration 08 — origin is now a FK to the `countries` table (`brands.origin_country`), not an enum |
 | `business_category` | `fnb`, `retail`, `services` |
 | `business_status` | `published`, `hidden` |
 | `submission_kind` | `new`, `edit` |
@@ -206,12 +209,20 @@ casing.
 | `category` | `business_category` | not null |
 | `subcategory_id` | text null | FK → `subcategories.id` |
 | `independence` | `independence_level` | not null, default `unverified` |
-| `origin` | `origin_level` | not null, default `unverified` |
+| `origin_country` | text null | FK → `countries.code` (ISO 3166-1); null = unverified; `SG` = buy-local. Migration 08 |
 | `independence_source` | text | **required when** independence ≠ unverified (CHECK) |
-| `origin_source` | text | **required when** origin ≠ unverified (CHECK) |
+| `origin_source` | text | **required when** `origin_country` is set (CHECK) |
 | `website` | text | |
 | `created_by` | uuid null | FK → `profiles.id` |
 | `created_at` / `updated_at` | timestamptz | default now() |
+
+### Table: `countries` — Phase 2 (migration 08)
+Official ISO 3166-1 country list; public read-only reference data for the origin
+picker and the `businesses_public` join. Flags are computed from the code.
+| Column | Type | Notes |
+|---|---|---|
+| `code` | text pk | ISO 3166-1 alpha-2 (e.g. `SG`, `US`) |
+| `name` | text | English name |
 
 ### Table: `businesses` (outlets) — Phase 1 (seeded) → Phase 2 (moderated writes)
 A physical **outlet / map pin**. Holds location-specific facts only; its

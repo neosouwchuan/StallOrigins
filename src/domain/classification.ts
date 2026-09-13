@@ -12,7 +12,24 @@ export type Independence =
   | "franchise"
   | "unverified";
 
-export type Origin = "local" | "foreign" | "unverified";
+// Axis B — ownership origin is a COUNTRY chosen from the official `countries`
+// list (ISO 3166-1). 'SG' is the buy-local signal; undefined = unverified.
+export interface OriginCountry {
+  code: string; // ISO 3166-1 alpha-2
+  name: string;
+}
+
+/** Coarse origin bucket for map filtering (specific country still shown on cards). */
+export type OriginCoarse = "singaporean" | "foreign" | "unverified";
+
+/** ISO alpha-2 code → flag emoji (regional indicator symbols). */
+export function flagEmoji(code: string): string {
+  if (!/^[A-Za-z]{2}$/.test(code)) return "🏳️";
+  const cc = code.toUpperCase();
+  return String.fromCodePoint(
+    ...[...cc].map((ch) => 0x1f1e6 + ch.charCodeAt(0) - 65),
+  );
+}
 
 export type Category = "fnb" | "retail" | "services";
 
@@ -47,26 +64,21 @@ export const INDEPENDENCE_META: Record<
   },
 };
 
-export const ORIGIN_META: Record<
-  Origin,
-  { label: string; emoji: string; description: string }
+/** Coarse buckets used by the map filter chips. */
+export const ORIGIN_COARSE_META: Record<
+  OriginCoarse,
+  { label: string; emoji: string }
 > = {
-  local: {
-    label: "Local",
-    emoji: "🇸🇬",
-    description: "Majority Singaporean beneficial ownership",
-  },
-  foreign: {
-    label: "Foreign",
-    emoji: "🌍",
-    description: "Majority foreign ownership / overseas parent",
-  },
-  unverified: {
-    label: "Unverified",
-    emoji: "❔",
-    description: "Not yet classified",
-  },
+  singaporean: { label: "Singaporean", emoji: "🇸🇬" },
+  foreign: { label: "Foreign", emoji: "🌍" },
+  unverified: { label: "Unverified", emoji: "❔" },
 };
+
+/** Map an origin country (or unverified) to its coarse bucket. */
+export function originCoarse(origin?: OriginCountry): OriginCoarse {
+  if (!origin) return "unverified";
+  return origin.code === "SG" ? "singaporean" : "foreign";
+}
 
 export const CATEGORY_META: Record<
   Category,
@@ -79,6 +91,8 @@ export const CATEGORY_META: Record<
 
 export interface Business {
   id: string;
+  /** The brand this outlet belongs to; classification is proposed against it. */
+  brandId?: string;
   name: string;
   lat: number;
   lng: number;
@@ -88,21 +102,16 @@ export interface Business {
   category: Category;
   subcategory?: string;
   independence: Independence;
-  origin: Origin;
+  /** Ownership country; undefined = unverified. */
+  origin?: OriginCountry;
   independenceSource?: string;
   originSource?: string;
   updatedAt?: string;
 }
 
-/** Marker colour is driven by ownership origin (SPEC §7). */
-export function originColor(origin: Origin): string {
-  switch (origin) {
-    case "local":
-      return "#16a34a"; // green
-    case "foreign":
-      return "#d97706"; // amber
-    case "unverified":
-    default:
-      return "#94a3b8"; // slate/grey
-  }
+/** Marker colour: green = Singaporean, amber = any foreign country, grey = unverified. */
+export function originColor(origin?: OriginCountry): string {
+  if (!origin) return "#94a3b8"; // slate/grey (unverified)
+  if (origin.code === "SG") return "#16a34a"; // green
+  return "#d97706"; // amber (any foreign country)
 }
