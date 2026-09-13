@@ -34,6 +34,7 @@ interface OutletRow {
   name: string | null;
   location: string;
   address: string | null;
+  unit: string | null;
   updated_at: string | null;
   brands: BrandEmbed;
   buildings: { id: string; name: string } | null; // via building_id
@@ -73,6 +74,7 @@ function outletToBusiness(r: OutletRow): Business {
     lat,
     lng,
     address: r.address ?? undefined,
+    unit: r.unit ?? undefined,
     building: r.buildings
       ? { id: r.buildings.id, name: r.buildings.name }
       : undefined,
@@ -96,7 +98,7 @@ export async function fetchBusinesses(): Promise<Business[]> {
   const q = await supabase
     .from("businesses")
     .select(
-      "id,brand_id,name,location,address,updated_at,buildings(id,name)," +
+      "id,brand_id,name,location,address,unit,updated_at,buildings(id,name)," +
         "brands(name,category,subcategory_id,independence,independence_source,origin_source,countries(code,name))",
     )
     .eq("status", "published");

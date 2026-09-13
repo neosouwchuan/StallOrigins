@@ -26,6 +26,7 @@ interface Props {
  */
 export function ProposeForm({ userId, pin, onBack, onClose, onDone }: Props) {
   const [name, setName] = useState("");
+  const [unit, setUnit] = useState("Ground floor");
   const [address, setAddress] = useState("");
   const [source, setSource] = useState("");
 
@@ -82,6 +83,7 @@ export function ProposeForm({ userId, pin, onBack, onClose, onDone }: Props) {
         lat: pin.lat,
         lng: pin.lng,
         address: address,
+        unit,
         source: source.trim(),
       });
       onDone();
@@ -118,6 +120,22 @@ export function ProposeForm({ userId, pin, onBack, onClose, onDone }: Props) {
             placeholder="e.g. Ah Hock Chicken Rice"
             className={inputCls}
           />
+        </label>
+
+        <label className="block">
+          <span className="mb-1 block text-[11px] font-medium text-slate-600">
+            Floor / unit
+          </span>
+          <input
+            value={unit}
+            onChange={(e) => setUnit(e.target.value)}
+            placeholder="e.g. #01-23 (paste from Google Maps)"
+            className={inputCls}
+          />
+          <p className="mt-1 text-[10px] text-slate-400">
+            Defaults to the ground floor — paste the unit/address from Google
+            Maps to be precise.
+          </p>
         </label>
 
         {/* Brand: search existing, or create a new one from the typed name */}

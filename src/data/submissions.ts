@@ -47,6 +47,8 @@ export interface NewShopInput {
   lat: number;
   lng: number;
   address?: string;
+  /** Floor + shop number, free string (e.g. "#01-23"); defaults to ground floor. */
+  unit?: string;
   source: string;
 }
 
@@ -67,6 +69,7 @@ export async function submitNewShop(
     category: input.category,
     lat: input.lat,
     lng: input.lng,
+    unit: input.unit?.trim() || "Ground floor",
     data_source: "community",
   };
   if (input.address?.trim()) payload.address = input.address.trim();

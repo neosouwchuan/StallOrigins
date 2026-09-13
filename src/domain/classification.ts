@@ -91,6 +91,8 @@ export interface Business {
   lat: number;
   lng: number;
   address?: string;
+  /** Floor + shop number, free string (e.g. "#01-23"); defaults to "Ground floor". */
+  unit?: string;
   /** Building/mall the outlet sits in (for group-by-building); undefined = none. */
   building?: { id: string; name: string };
   category: Category;

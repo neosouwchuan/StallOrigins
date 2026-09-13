@@ -319,6 +319,11 @@ function BusinessCard({
         {b.subcategory ? ` · ${b.subcategory.replace(/_/g, " ")}` : ""}
         {b.building ? ` · ${b.building.name}` : ""}
       </div>
+      {(b.unit || b.address) && (
+        <div className="text-[11px] text-slate-500">
+          📍 {[b.unit, b.address].filter(Boolean).join(" · ")}
+        </div>
+      )}
       <div className="flex flex-wrap gap-1">
         <Badge>{`${ind.emoji} ${ind.label}`}</Badge>
         <Badge>{originLabel}</Badge>
