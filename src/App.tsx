@@ -8,7 +8,7 @@ import { fetchBusinesses } from "./data/businesses";
 import { SAMPLE_BUSINESSES } from "./data/sampleBusinesses";
 import { AuthBar } from "./components/AuthBar";
 import { ClassifyForm } from "./components/ClassifyForm";
-import { ModerationPanel } from "./components/ModerationPanel";
+import { Sidebar } from "./components/Sidebar";
 import {
   type Business,
   type Category,
@@ -34,7 +34,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [classifyTarget, setClassifyTarget] = useState<Business | null>(null);
-  const [showModeration, setShowModeration] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const load = useCallback(() => {
@@ -90,15 +90,14 @@ export default function App() {
               </p>
             </div>
             <div className="flex items-center gap-2">
-              {auth.isModerator && (
-                <button
-                  onClick={() => setShowModeration(true)}
-                  className="rounded bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-800 hover:bg-amber-200"
-                >
-                  Moderate
-                </button>
-              )}
               {isSupabaseConfigured && <AuthBar auth={auth} />}
+              <button
+                onClick={() => setSidebarOpen(true)}
+                aria-label="Open menu"
+                className="rounded bg-slate-100 px-2 py-1 text-[13px] leading-none text-slate-600 hover:bg-slate-200"
+              >
+                ☰
+              </button>
             </div>
           </div>
 
@@ -143,12 +142,12 @@ export default function App() {
           }}
         />
       )}
-      {showModeration && auth.isModerator && (
-        <ModerationPanel
-          onClose={() => setShowModeration(false)}
-          onApplied={load}
-        />
-      )}
+      <Sidebar
+        auth={auth}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        onApplied={load}
+      />
 
       {/* Toast */}
       {toast && (

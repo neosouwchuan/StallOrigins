@@ -81,3 +81,24 @@ export async function rejectSubmission(id: string, note?: string): Promise<void>
   });
   if (error) throw new Error(error.message);
 }
+
+export interface ChangeRow {
+  id: number;
+  field: string;
+  old_value: string | null;
+  new_value: string | null;
+  changed_at: string;
+  brands: { name: string } | null;
+}
+
+/** Recent approved changes from the audit log (edit_history is world-readable). */
+export async function fetchRecentChanges(limit = 30): Promise<ChangeRow[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from("edit_history")
+    .select("id,field,old_value,new_value,changed_at,brands(name)")
+    .order("changed_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return (data as unknown as ChangeRow[]) ?? [];
+}
