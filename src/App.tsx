@@ -241,6 +241,7 @@ export default function App() {
         open={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
         onApplied={load}
+        businesses={businesses}
       />
 
       {/* Toast */}
