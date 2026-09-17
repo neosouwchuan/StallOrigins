@@ -1,7 +1,17 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { MapContainer, TileLayer, Marker } from "react-leaflet";
+import L from "leaflet";
 import { Modal } from "./Modal";
+import { getTileSource } from "../map/tileSource";
 import { resolveFlag, type OpenFlag } from "../data/flags";
 import type { Business } from "../domain/classification";
+
+/** Draggable pin for repositioning a flagged outlet. */
+const PIN_ICON = L.divIcon({
+  className: "draft-pin",
+  iconSize: [20, 20],
+  iconAnchor: [10, 10],
+});
 
 interface Props {
   flag: OpenFlag;
@@ -22,8 +32,13 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
   const [address, setAddress] = useState(business?.address ?? "");
   const [markClosed, setMarkClosed] = useState(false);
   const [note, setNote] = useState("");
+  const [pin, setPin] = useState<{ lat: number; lng: number } | null>(
+    business ? { lat: business.lat, lng: business.lng } : null,
+  );
+  const [moved, setMoved] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const tiles = useMemo(() => getTileSource(), []);
 
   async function run(status: "resolved" | "dismissed", withChanges: boolean) {
     if (!note.trim()) {
@@ -39,6 +54,10 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
         if (unit.trim()) changes.unit = unit.trim();
         changes.address = address.trim() || null;
         if (markClosed) changes.status = "hidden";
+        if (moved && pin) {
+          changes.lat = pin.lat;
+          changes.lng = pin.lng;
+        }
       }
       await resolveFlag(flag.id, { status, changes, note: note.trim() });
       onDone();
@@ -84,6 +103,47 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
           </span>
           <input value={address} onChange={(e) => setAddress(e.target.value)} className={inputCls} />
         </label>
+
+        {pin && (
+          <div>
+            <span className="mb-1 block text-[11px] font-medium text-slate-600">
+              Location{" "}
+              <span className="text-slate-400">(drag the pin if it’s wrong)</span>
+            </span>
+            <div className="h-40 w-full overflow-hidden rounded border border-slate-200">
+              <MapContainer
+                center={[pin.lat, pin.lng]}
+                zoom={18}
+                className="h-full w-full"
+              >
+                {tiles.kind === "raster" && (
+                  <TileLayer
+                    url={tiles.url}
+                    attribution={tiles.attribution}
+                    maxZoom={tiles.maxZoom}
+                  />
+                )}
+                <Marker
+                  position={[pin.lat, pin.lng]}
+                  draggable
+                  icon={PIN_ICON}
+                  eventHandlers={{
+                    dragend: (e) => {
+                      const ll = (e.target as L.Marker).getLatLng();
+                      setPin({ lat: ll.lat, lng: ll.lng });
+                      setMoved(true);
+                    },
+                  }}
+                />
+              </MapContainer>
+            </div>
+            {moved && (
+              <p className="mt-1 text-[10px] text-green-700">
+                Pin moved — saved with “Resolve with change”.
+              </p>
+            )}
+          </div>
+        )}
 
         <label className="flex items-center gap-2 text-[12px] text-slate-700">
           <input
