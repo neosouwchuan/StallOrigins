@@ -11,150 +11,66 @@ function normIndep(i: string): Independence {
 }
 
 /**
- * An outlet row with its brand embedded. Classification lives on the brand;
- * origin is the brand's country (via the `origin_country` FK to `countries`).
- * `location` is a PostGIS geography returned as EWKB hex, decoded client-side.
+ * A row of `businesses_public` — the client read view. It flattens each outlet
+ * with its brand + building + country, and exposes the pin as plain lat/lng
+ * (ST_Y/ST_X), so no client-side PostGIS decoding is needed.
  */
-interface CountryEmbed {
-  code: string;
-  name: string;
-}
-interface BrandEmbed {
-  name: string;
-  category: Category;
-  subcategory_id: string | null;
-  independence: Independence;
-  independence_source: string | null;
-  origin_source: string | null;
-  countries: CountryEmbed | null; // via brands.origin_country
-}
-interface OutletRow {
+interface PublicRow {
   id: string;
   brand_id: string;
-  name: string | null;
-  location: string;
+  name: string;
+  lat: number;
+  lng: number;
   address: string | null;
   unit: string | null;
+  building_id: string | null;
+  building: string | null;
+  category: Category;
+  subcategory_id: string | null;
+  independence: string;
+  independence_source: string | null;
+  origin_country: string | null;
+  origin_country_name: string | null;
+  origin_source: string | null;
   updated_at: string | null;
-  brands: BrandEmbed;
-  buildings: { id: string; name: string } | null; // via building_id
 }
 
-/**
- * Decode a PostGIS EWKB hex Point. `businesses.location` is NOT NULL and PostGIS
- * always emits a valid Point, so a location is always expected — malformed input
- * throws rather than silently dropping a pin.
- */
-function decodeEwkbPoint(hex: string): { lat: number; lng: number } {
-  if (!hex || hex.length < 42) throw new Error(`Invalid EWKB point: "${hex}"`);
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.substr(i * 2, 2), 16);
-  }
-  const view = new DataView(bytes.buffer);
-  const littleEndian = bytes[0] === 1;
-  const type = view.getUint32(1, littleEndian);
-  const offset = (type & 0x20000000) !== 0 ? 9 : 5;
-  const lng = view.getFloat64(offset, littleEndian);
-  const lat = view.getFloat64(offset + 8, littleEndian);
-  if (Number.isNaN(lat) || Number.isNaN(lng)) {
-    throw new Error(`Invalid EWKB point coordinates: "${hex}"`);
-  }
-  return { lat, lng };
-}
-
-function outletToBusiness(r: OutletRow): Business {
-  const { lat, lng } = decodeEwkbPoint(r.location);
-  const b = r.brands;
-  const country = b.countries;
+function toBusiness(r: PublicRow): Business {
   return {
     id: r.id,
     brandId: r.brand_id,
-    name: r.name ?? b.name,
-    lat,
-    lng,
+    name: r.name,
+    lat: r.lat,
+    lng: r.lng,
     address: r.address ?? undefined,
     unit: r.unit ?? undefined,
-    building: r.buildings
-      ? { id: r.buildings.id, name: r.buildings.name }
+    building:
+      r.building_id && r.building
+        ? { id: r.building_id, name: r.building }
+        : undefined,
+    category: r.category,
+    subcategory: r.subcategory_id ?? undefined,
+    independence: normIndep(r.independence),
+    origin: r.origin_country
+      ? { code: r.origin_country, name: r.origin_country_name ?? r.origin_country }
       : undefined,
-    category: b.category,
-    subcategory: b.subcategory_id ?? undefined,
-    independence: normIndep(b.independence),
-    origin: country ? { code: country.code, name: country.name } : undefined,
-    independenceSource: b.independence_source ?? undefined,
-    originSource: b.origin_source ?? undefined,
+    independenceSource: r.independence_source ?? undefined,
+    originSource: r.origin_source ?? undefined,
     updatedAt: r.updated_at ? r.updated_at.slice(0, 10) : undefined,
   };
 }
 
-/**
- * Fetch published outlets with their brand + country. Falls back to the
- * pre-migration-08 shape (brand.origin enum, no `countries`) so the map keeps
- * loading during the transition. Returns [] when Supabase isn't configured.
- */
+/** Fetch published outlets from the read view. Returns [] when unconfigured. */
 export async function fetchBusinesses(): Promise<Business[]> {
   if (!supabase) return [];
-  const q = await supabase
-    .from("businesses")
+  const { data, error } = await supabase
+    .from("businesses_public")
     .select(
-      "id,brand_id,name,location,address,unit,updated_at,buildings(id,name)," +
-        "brands(name,category,subcategory_id,independence,independence_source,origin_source,countries(code,name))",
-    )
-    .eq("status", "published");
-  if (!q.error) {
-    return (q.data as unknown as OutletRow[]).map(outletToBusiness);
-  }
-  if (!/countr|origin_country|relationship|schema cache/i.test(q.error.message)) {
-    throw new Error(q.error.message);
-  }
-  console.warn(
-    "countries not found — reading legacy origin. Apply migration 08 for country origins.",
-  );
-  return fetchLegacy();
-}
-
-// --- Legacy fallback: migration-07 shape (brand.origin enum) ----------------
-interface LegacyBrand {
-  name: string;
-  category: Category;
-  subcategory_id: string | null;
-  independence: Independence;
-  independence_source: string | null;
-  origin: string;
-  origin_source: string | null;
-}
-interface LegacyRow extends Omit<OutletRow, "brands"> {
-  brands: LegacyBrand;
-}
-
-async function fetchLegacy(): Promise<Business[]> {
-  const { data, error } = await supabase!
-    .from("businesses")
-    .select(
-      "id,brand_id,name,location,address,updated_at," +
-        "brands(name,category,subcategory_id,independence,independence_source,origin,origin_source)",
+      "id,brand_id,name,lat,lng,address,unit,building_id,building,category," +
+        "subcategory_id,independence,independence_source,origin_country," +
+        "origin_country_name,origin_source,updated_at",
     )
     .eq("status", "published");
   if (error) throw new Error(error.message);
-  return (data as unknown as LegacyRow[]).map((r) => {
-    const { lat, lng } = decodeEwkbPoint(r.location);
-    const b = r.brands;
-    const sg = b.origin === "local" || b.origin === "singaporean";
-    return {
-      id: r.id,
-      brandId: r.brand_id,
-      name: r.name ?? b.name,
-      lat,
-      lng,
-      address: r.address ?? undefined,
-      category: b.category,
-      subcategory: b.subcategory_id ?? undefined,
-      independence: normIndep(b.independence),
-      origin: sg ? { code: "SG", name: "Singapore" } : undefined,
-      independenceSource: b.independence_source ?? undefined,
-      originSource: b.origin_source ?? undefined,
-      updatedAt: r.updated_at ? r.updated_at.slice(0, 10) : undefined,
-    };
-  });
+  return ((data as unknown as PublicRow[]) ?? []).map(toBusiness);
 }
