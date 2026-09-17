@@ -26,6 +26,10 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
   const [err, setErr] = useState<string | null>(null);
 
   async function run(status: "resolved" | "dismissed", withChanges: boolean) {
+    if (!note.trim()) {
+      setErr("A note is required — say what you did or why.");
+      return;
+    }
     setBusy(true);
     setErr(null);
     try {
@@ -36,7 +40,7 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
         changes.address = address.trim() || null;
         if (markClosed) changes.status = "hidden";
       }
-      await resolveFlag(flag.id, { status, changes, note: note.trim() || undefined });
+      await resolveFlag(flag.id, { status, changes, note: note.trim() });
       onDone();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -55,8 +59,9 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
 
       <form onSubmit={(e) => e.preventDefault()} className="space-y-3">
         <p className="text-[11px] text-slate-500">
-          Fix the shop below and choose <b>Resolve with change</b>, or resolve /
-          dismiss without editing. Changes are logged and linked to this report.
+          Fix the shop below and choose <b>Resolve with change</b>, or{" "}
+          <b>Dismiss</b> if there's nothing to change. A note is required either
+          way; changes are logged and linked to this report.
         </p>
 
         <label className="block">
@@ -91,9 +96,10 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
 
         <label className="block">
           <span className="mb-1 block text-[11px] font-medium text-slate-600">
-            Resolution note <span className="text-slate-400">(optional)</span>
+            Resolution note (required)
           </span>
           <input
+            required
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="What you did / how you verified"
@@ -108,17 +114,9 @@ export function ResolveFlagForm({ flag, business, onClose, onDone }: Props) {
             type="button"
             disabled={busy}
             onClick={() => run("dismissed", false)}
-            className="rounded px-3 py-1 text-[12px] text-slate-500 hover:bg-slate-100 disabled:opacity-50"
+            className="rounded bg-slate-100 px-3 py-1 text-[12px] font-medium text-slate-700 hover:bg-slate-200 disabled:opacity-50"
           >
             Dismiss
-          </button>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => run("resolved", false)}
-            className="rounded bg-slate-100 px-3 py-1 text-[12px] font-medium text-slate-700 disabled:opacity-50"
-          >
-            Resolve (no change)
           </button>
           <button
             type="button"
