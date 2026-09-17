@@ -39,6 +39,8 @@ interface MapViewProps {
   businesses: Business[];
   /** When set, cards show a "Suggest classification" action for signed-in users. */
   onClassify?: (b: Business) => void;
+  /** When set, cards show a "Report a problem" action for signed-in users. */
+  onFlag?: (b: Business) => void;
   /** Collapse each building's stalls into one marker. */
   groupByBuilding?: boolean;
   /** When set (admin boundary editing), render editable building polygons. */
@@ -93,6 +95,7 @@ function groupBusinesses(businesses: Business[]): {
 export default function MapView({
   businesses,
   onClassify,
+  onFlag,
   groupByBuilding,
   editBuildings,
   onVertexDrag,
@@ -186,12 +189,12 @@ export default function MapView({
             </CircleMarker>
           ))}
           {grouped.ungrouped.map((b) => (
-            <OutletMarker key={b.id} b={b} onClassify={onClassify} />
+            <OutletMarker key={b.id} b={b} onClassify={onClassify} onFlag={onFlag} />
           ))}
         </>
       ) : (
         businesses.map((b) => (
-          <OutletMarker key={b.id} b={b} onClassify={onClassify} />
+          <OutletMarker key={b.id} b={b} onClassify={onClassify} onFlag={onFlag} />
         ))
       )}
     </MapContainer>
@@ -201,9 +204,11 @@ export default function MapView({
 function OutletMarker({
   b,
   onClassify,
+  onFlag,
 }: {
   b: Business;
   onClassify?: (b: Business) => void;
+  onFlag?: (b: Business) => void;
 }) {
   return (
     <CircleMarker
@@ -217,7 +222,7 @@ function OutletMarker({
       }}
     >
       <Popup>
-        <BusinessCard business={b} onClassify={onClassify} />
+        <BusinessCard business={b} onClassify={onClassify} onFlag={onFlag} />
       </Popup>
     </CircleMarker>
   );
@@ -302,9 +307,11 @@ function BuildingCard({
 function BusinessCard({
   business: b,
   onClassify,
+  onFlag,
 }: {
   business: Business;
   onClassify?: (b: Business) => void;
+  onFlag?: (b: Business) => void;
 }) {
   const ind = INDEPENDENCE_META[b.independence];
   const originLabel = b.origin
@@ -339,6 +346,14 @@ function BusinessCard({
           className="w-full rounded bg-green-50 px-2 py-1 text-[11px] font-medium text-green-800 hover:bg-green-100"
         >
           Suggest classification
+        </button>
+      )}
+      {onFlag && (
+        <button
+          onClick={() => onFlag(b)}
+          className="w-full rounded px-2 py-1 text-[11px] font-medium text-amber-700 hover:bg-amber-50"
+        >
+          ⚑ Report a problem
         </button>
       )}
     </div>

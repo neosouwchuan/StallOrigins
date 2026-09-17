@@ -9,6 +9,11 @@ import {
   type ChangeRow,
 } from "../data/submissions";
 import { fetchBrands, type Brand } from "../data/brands";
+import {
+  fetchOpenFlags,
+  resolveFlag,
+  type OpenFlag,
+} from "../data/flags";
 import { type Business, INDEPENDENCE_META, flagEmoji } from "../domain/classification";
 
 interface Props {
@@ -33,9 +38,11 @@ const TABS: { id: Tab; label: string }[] = [
  */
 export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
   const isMod = auth.isModerator;
+  const userId = auth.session?.user.id;
 
   const [tab, setTab] = useState<Tab>("brands");
   const [pending, setPending] = useState<PendingSubmission[] | null>(null);
+  const [flags, setFlags] = useState<OpenFlag[] | null>(null);
   const [changes, setChanges] = useState<ChangeRow[] | null>(null);
   const [brands, setBrands] = useState<Brand[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -68,6 +75,7 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
     fetchBrands().then(setBrands).catch(showErr);
     fetchRecentChanges().then(setChanges).catch(showErr);
     if (isMod) fetchPendingSubmissions().then(setPending).catch(showErr);
+    if (isMod) fetchOpenFlags().then(setFlags).catch(showErr);
     function showErr(e: unknown) {
       setErr(e instanceof Error ? e.message : String(e));
     }
@@ -79,6 +87,7 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
     try {
       await fn();
       setPending(await fetchPendingSubmissions());
+      setFlags(await fetchOpenFlags());
       setChanges(await fetchRecentChanges());
       onApplied();
     } catch (e) {
@@ -124,7 +133,7 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
               }
             >
               {t.id === "unresolved"
-                ? `${t.label}${isMod && pending ? ` (${pending.length})` : ""}`
+                ? `${t.label}${isMod && (pending || flags) ? ` (${(pending?.length ?? 0) + (flags?.length ?? 0)})` : ""}`
                 : t.id === "brands"
                   ? `${t.label}${brands ? ` (${brands.length})` : ""}`
                   : t.label}
@@ -139,9 +148,15 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
             <UnresolvedPanel
               isMod={isMod}
               pending={pending}
+              flags={flags}
               busyId={busyId}
               onApprove={(id) => act(id, () => approveSubmission(id))}
               onReject={(id) => act(id, () => rejectSubmission(id))}
+              onResolveFlag={(id, status) =>
+                userId
+                  ? act(id, () => resolveFlag(userId, id, status))
+                  : undefined
+              }
             />
           )}
 
@@ -222,57 +237,113 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
 function UnresolvedPanel({
   isMod,
   pending,
+  flags,
   busyId,
   onApprove,
   onReject,
+  onResolveFlag,
 }: {
   isMod: boolean;
   pending: PendingSubmission[] | null;
+  flags: OpenFlag[] | null;
   busyId: string | null;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
+  onResolveFlag: (id: string, status: "resolved" | "dismissed") => void;
 }) {
   if (!isMod)
     return (
       <p className="text-[12px] leading-relaxed text-slate-500">
         The moderation queue is available to moderators. Use “Suggest
-        classification” or “Propose a shop” to contribute — your submissions
-        appear here for a moderator to review.
+        classification”, “Propose a shop”, or “Report a problem” to contribute —
+        your submissions appear here for a moderator to review.
       </p>
     );
-  if (!pending) return <p className="text-[11px] text-slate-400">Loading…</p>;
-  if (pending.length === 0)
+  if (!pending || !flags)
+    return <p className="text-[11px] text-slate-400">Loading…</p>;
+  if (pending.length === 0 && flags.length === 0)
     return <p className="text-[11px] text-slate-400">All clear. 🎉</p>;
 
   return (
-    <ul className="space-y-2">
-      {pending.map((s) => (
-        <li
-          key={s.id}
-          className="rounded-lg border border-slate-200 p-2 text-[12px]"
-        >
-          <div className="font-medium text-slate-800">{title(s)}</div>
-          <div className="text-[11px] text-slate-600">{summarize(s)}</div>
-          <div className="text-[10px] text-slate-400">source: {s.source}</div>
-          <div className="mt-1.5 flex gap-2">
-            <button
-              disabled={busyId === s.id}
-              onClick={() => onApprove(s.id)}
-              className="rounded bg-green-700 px-2 py-0.5 text-[11px] text-white disabled:opacity-50"
-            >
-              Approve
-            </button>
-            <button
-              disabled={busyId === s.id}
-              onClick={() => onReject(s.id)}
-              className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-50"
-            >
-              Reject
-            </button>
-          </div>
-        </li>
-      ))}
-    </ul>
+    <div className="space-y-4">
+      {pending.length > 0 && (
+        <section>
+          <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Submissions ({pending.length})
+          </h4>
+          <ul className="space-y-2">
+            {pending.map((s) => (
+              <li
+                key={s.id}
+                className="rounded-lg border border-slate-200 p-2 text-[12px]"
+              >
+                <div className="font-medium text-slate-800">{title(s)}</div>
+                <div className="text-[11px] text-slate-600">{summarize(s)}</div>
+                <div className="text-[10px] text-slate-400">
+                  source: {s.source}
+                </div>
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    disabled={busyId === s.id}
+                    onClick={() => onApprove(s.id)}
+                    className="rounded bg-green-700 px-2 py-0.5 text-[11px] text-white disabled:opacity-50"
+                  >
+                    Approve
+                  </button>
+                  <button
+                    disabled={busyId === s.id}
+                    onClick={() => onReject(s.id)}
+                    className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-50"
+                  >
+                    Reject
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {flags.length > 0 && (
+        <section>
+          <h4 className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+            Flags ({flags.length})
+          </h4>
+          <ul className="space-y-2">
+            {flags.map((f) => (
+              <li
+                key={f.id}
+                className="rounded-lg border border-amber-200 bg-amber-50/40 p-2 text-[12px]"
+              >
+                <div className="font-medium text-slate-800">
+                  ⚑ {f.businesses?.name ?? "(shop)"}
+                </div>
+                <div className="text-[11px] text-slate-600">{f.reason}</div>
+                {f.detail && (
+                  <div className="text-[10px] text-slate-500">“{f.detail}”</div>
+                )}
+                <div className="mt-1.5 flex gap-2">
+                  <button
+                    disabled={busyId === f.id}
+                    onClick={() => onResolveFlag(f.id, "resolved")}
+                    className="rounded bg-green-700 px-2 py-0.5 text-[11px] text-white disabled:opacity-50"
+                  >
+                    Resolve
+                  </button>
+                  <button
+                    disabled={busyId === f.id}
+                    onClick={() => onResolveFlag(f.id, "dismissed")}
+                    className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-50"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+    </div>
   );
 }
 

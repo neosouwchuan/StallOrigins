@@ -14,6 +14,7 @@ import {
 import { SAMPLE_BUSINESSES } from "./data/sampleBusinesses";
 import { AuthBar } from "./components/AuthBar";
 import { ClassifyForm } from "./components/ClassifyForm";
+import { FlagForm } from "./components/FlagForm";
 import { ProposeForm } from "./components/ProposeForm";
 import { Sidebar } from "./components/Sidebar";
 import {
@@ -42,6 +43,7 @@ export default function App() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [classifyTarget, setClassifyTarget] = useState<Business | null>(null);
+  const [flagTarget, setFlagTarget] = useState<Business | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [editBuildings, setEditBuildings] = useState<BuildingShape[] | null>(
@@ -234,6 +236,7 @@ export default function App() {
         draftPin={draftPin}
         onMapClick={(lat, lng) => setDraftPin({ lat, lng })}
         onClassify={auth.session ? (b) => setClassifyTarget(b) : undefined}
+        onFlag={auth.session ? (b) => setFlagTarget(b) : undefined}
       />
 
       {editBuildings && (
@@ -302,6 +305,17 @@ export default function App() {
           onDone={() => {
             setClassifyTarget(null);
             flash("Suggestion submitted for review — thanks!");
+          }}
+        />
+      )}
+      {flagTarget && auth.session && (
+        <FlagForm
+          business={flagTarget}
+          userId={auth.session.user.id}
+          onClose={() => setFlagTarget(null)}
+          onDone={() => {
+            setFlagTarget(null);
+            flash("Report submitted — thanks for flagging it.");
           }}
         />
       )}
