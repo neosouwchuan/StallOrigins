@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, runQuery } from "../lib/supabase";
 import type { Category, Independence } from "../domain/classification";
 
 export interface ClassifyInput {
@@ -98,14 +98,15 @@ export interface PendingSubmission {
 /** Pending submissions for the moderation queue (moderators only, via RLS). */
 export async function fetchPendingSubmissions(): Promise<PendingSubmission[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("submissions")
-    .select(
-      "id,brand_id,business_id,kind,payload,source,note,created_at,brands(name)",
-    )
-    .eq("status", "pending")
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
+  const data = await runQuery<PendingSubmission[]>(() =>
+    supabase!
+      .from("submissions")
+      .select(
+        "id,brand_id,business_id,kind,payload,source,note,created_at,brands(name)",
+      )
+      .eq("status", "pending")
+      .order("created_at", { ascending: true }),
+  );
   return (data as unknown as PendingSubmission[]) ?? [];
 }
 
@@ -140,11 +141,12 @@ export interface ChangeRow {
 /** Recent approved changes from the audit log (edit_history is world-readable). */
 export async function fetchRecentChanges(limit = 30): Promise<ChangeRow[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("edit_history")
-    .select("id,field,old_value,new_value,changed_at,brands(name)")
-    .order("changed_at", { ascending: false })
-    .limit(limit);
-  if (error) throw new Error(error.message);
+  const data = await runQuery<ChangeRow[]>(() =>
+    supabase!
+      .from("edit_history")
+      .select("id,field,old_value,new_value,changed_at,brands(name)")
+      .order("changed_at", { ascending: false })
+      .limit(limit),
+  );
   return (data as unknown as ChangeRow[]) ?? [];
 }

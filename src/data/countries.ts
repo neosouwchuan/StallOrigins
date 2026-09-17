@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, runQuery } from "../lib/supabase";
 
 export interface Country {
   code: string;
@@ -8,10 +8,8 @@ export interface Country {
 /** The official country list (ISO 3166-1) from the `countries` table. */
 export async function fetchCountries(): Promise<Country[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("countries")
-    .select("code,name")
-    .order("name");
-  if (error) throw new Error(error.message);
+  const data = await runQuery<Country[]>(() =>
+    supabase!.from("countries").select("code,name").order("name"),
+  );
   return (data as Country[]) ?? [];
 }

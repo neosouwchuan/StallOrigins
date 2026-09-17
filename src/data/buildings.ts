@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, runQuery } from "../lib/supabase";
 
 /** A building polygon as editable vertices ([lat, lng], open ring). */
 export interface BuildingShape {
@@ -17,10 +17,9 @@ interface BuildingRow {
 /** Load building polygons (from the GeoJSON view) as editable vertex lists. */
 export async function fetchBuildings(): Promise<BuildingShape[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("buildings_public")
-    .select("id,name,kind,geojson");
-  if (error) throw new Error(error.message);
+  const data = await runQuery<BuildingRow[]>(() =>
+    supabase!.from("buildings_public").select("id,name,kind,geojson"),
+  );
   return ((data as BuildingRow[]) ?? []).map((r) => {
     const gj = JSON.parse(r.geojson) as { coordinates: number[][][] };
     const ring = gj.coordinates?.[0] ?? [];

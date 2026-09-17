@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, runQuery } from "../lib/supabase";
 import type {
   Business,
   Category,
@@ -63,14 +63,15 @@ function toBusiness(r: PublicRow): Business {
 /** Fetch published outlets from the read view. Returns [] when unconfigured. */
 export async function fetchBusinesses(): Promise<Business[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("businesses_public")
-    .select(
-      "id,brand_id,name,lat,lng,address,unit,building_id,building,category," +
-        "subcategory_id,independence,independence_source,origin_country," +
-        "origin_country_name,origin_source,updated_at",
-    )
-    .eq("status", "published");
-  if (error) throw new Error(error.message);
+  const data = await runQuery<PublicRow[]>(() =>
+    supabase!
+      .from("businesses_public")
+      .select(
+        "id,brand_id,name,lat,lng,address,unit,building_id,building,category," +
+          "subcategory_id,independence,independence_source,origin_country," +
+          "origin_country_name,origin_source,updated_at",
+      )
+      .eq("status", "published"),
+  );
   return ((data as unknown as PublicRow[]) ?? []).map(toBusiness);
 }

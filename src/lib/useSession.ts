@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { supabase } from "./supabase";
+import { supabase, runQuery } from "./supabase";
 
 export type Role = "contributor" | "moderator" | "admin";
 
@@ -43,12 +43,15 @@ export function useSession(): AuthState {
       setProfile(null);
       return;
     }
-    supabase
-      .from("profiles")
-      .select("id,display_name,role")
-      .eq("id", session.user.id)
-      .single()
-      .then(({ data }) => setProfile((data as Profile) ?? null));
+    runQuery<Profile>(() =>
+      supabase!
+        .from("profiles")
+        .select("id,display_name,role")
+        .eq("id", session.user.id)
+        .single(),
+    )
+      .then((data) => setProfile((data as Profile) ?? null))
+      .catch(() => setProfile(null));
   }, [session]);
 
   const role = profile?.role;

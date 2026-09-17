@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, runQuery } from "../lib/supabase";
 import type {
   Category,
   Independence,
@@ -30,11 +30,12 @@ function normIndep(i: string): Independence {
 /** Fetch every brand with its country. Returns [] when Supabase isn't configured. */
 export async function fetchBrands(): Promise<Brand[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("brands")
-    .select("id,name,category,independence,countries(code,name)")
-    .order("name");
-  if (error) throw new Error(error.message);
+  const data = await runQuery<BrandRow[]>(() =>
+    supabase!
+      .from("brands")
+      .select("id,name,category,independence,countries(code,name)")
+      .order("name"),
+  );
   return ((data as unknown as BrandRow[]) ?? []).map((r) => ({
     id: r.id,
     name: r.name,

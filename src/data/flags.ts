@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase, runQuery } from "../lib/supabase";
 
 /** Common report reasons; `detail` carries anything free-form. */
 export const FLAG_REASONS = [
@@ -41,12 +41,13 @@ export interface OpenFlag {
 /** Open flags for the moderation queue (moderators see all, via RLS). */
 export async function fetchOpenFlags(): Promise<OpenFlag[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from("flags")
-    .select("id,business_id,reason,detail,created_at,businesses(name)")
-    .eq("status", "open")
-    .order("created_at", { ascending: true });
-  if (error) throw new Error(error.message);
+  const data = await runQuery<OpenFlag[]>(() =>
+    supabase!
+      .from("flags")
+      .select("id,business_id,reason,detail,created_at,businesses(name)")
+      .eq("status", "open")
+      .order("created_at", { ascending: true }),
+  );
   return (data as unknown as OpenFlag[]) ?? [];
 }
 
