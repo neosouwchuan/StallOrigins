@@ -14,6 +14,7 @@ import {
   resolveFlag,
   type OpenFlag,
 } from "../data/flags";
+import { ResolveFlagForm } from "./ResolveFlagForm";
 import { type Business, INDEPENDENCE_META, flagEmoji } from "../domain/classification";
 
 interface Props {
@@ -38,9 +39,9 @@ const TABS: { id: Tab; label: string }[] = [
  */
 export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
   const isMod = auth.isModerator;
-  const userId = auth.session?.user.id;
 
   const [tab, setTab] = useState<Tab>("brands");
+  const [resolvingFlag, setResolvingFlag] = useState<OpenFlag | null>(null);
   const [pending, setPending] = useState<PendingSubmission[] | null>(null);
   const [flags, setFlags] = useState<OpenFlag[] | null>(null);
   const [changes, setChanges] = useState<ChangeRow[] | null>(null);
@@ -81,15 +82,19 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
     }
   }, [open, isMod]);
 
+  async function refresh() {
+    setPending(await fetchPendingSubmissions());
+    setFlags(await fetchOpenFlags());
+    setChanges(await fetchRecentChanges());
+    onApplied();
+  }
+
   async function act(id: string, fn: () => Promise<void>) {
     setBusyId(id);
     setErr(null);
     try {
       await fn();
-      setPending(await fetchPendingSubmissions());
-      setFlags(await fetchOpenFlags());
-      setChanges(await fetchRecentChanges());
-      onApplied();
+      await refresh();
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -152,10 +157,9 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
               busyId={busyId}
               onApprove={(id) => act(id, () => approveSubmission(id))}
               onReject={(id) => act(id, () => rejectSubmission(id))}
-              onResolveFlag={(id, status) =>
-                userId
-                  ? act(id, () => resolveFlag(userId, id, status))
-                  : undefined
+              onResolveFlag={(f) => setResolvingFlag(f)}
+              onDismissFlag={(id) =>
+                act(id, () => resolveFlag(id, { status: "dismissed" }))
               }
             />
           )}
@@ -230,6 +234,18 @@ export function Sidebar({ auth, open, onClose, onApplied, businesses }: Props) {
           )}
         </div>
       </aside>
+
+      {resolvingFlag && (
+        <ResolveFlagForm
+          flag={resolvingFlag}
+          business={businesses.find((b) => b.id === resolvingFlag.business_id)}
+          onClose={() => setResolvingFlag(null)}
+          onDone={() => {
+            setResolvingFlag(null);
+            refresh();
+          }}
+        />
+      )}
     </>
   );
 }
@@ -242,6 +258,7 @@ function UnresolvedPanel({
   onApprove,
   onReject,
   onResolveFlag,
+  onDismissFlag,
 }: {
   isMod: boolean;
   pending: PendingSubmission[] | null;
@@ -249,7 +266,8 @@ function UnresolvedPanel({
   busyId: string | null;
   onApprove: (id: string) => void;
   onReject: (id: string) => void;
-  onResolveFlag: (id: string, status: "resolved" | "dismissed") => void;
+  onResolveFlag: (f: OpenFlag) => void;
+  onDismissFlag: (id: string) => void;
 }) {
   if (!isMod)
     return (
@@ -325,14 +343,14 @@ function UnresolvedPanel({
                 <div className="mt-1.5 flex gap-2">
                   <button
                     disabled={busyId === f.id}
-                    onClick={() => onResolveFlag(f.id, "resolved")}
+                    onClick={() => onResolveFlag(f)}
                     className="rounded bg-green-700 px-2 py-0.5 text-[11px] text-white disabled:opacity-50"
                   >
-                    Resolve
+                    Resolve…
                   </button>
                   <button
                     disabled={busyId === f.id}
-                    onClick={() => onResolveFlag(f.id, "dismissed")}
+                    onClick={() => onDismissFlag(f.id)}
                     className="rounded bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 disabled:opacity-50"
                   >
                     Dismiss

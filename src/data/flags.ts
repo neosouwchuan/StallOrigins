@@ -50,16 +50,28 @@ export async function fetchOpenFlags(): Promise<OpenFlag[]> {
   return (data as unknown as OpenFlag[]) ?? [];
 }
 
-/** Resolve or dismiss a flag (moderator only, via RLS). */
+export interface FlagResolution {
+  status: "resolved" | "dismissed";
+  /** Outlet fields to change while resolving (name/unit/address/postal_code/status). */
+  changes?: Record<string, unknown>;
+  note?: string;
+}
+
+/**
+ * Resolve or dismiss a flag (moderator only). When resolving with `changes`,
+ * the RPC applies them to the flagged outlet, logs each change to edit_history
+ * tagged with the flag, and links the flag to that change.
+ */
 export async function resolveFlag(
-  userId: string,
   id: string,
-  status: "resolved" | "dismissed",
+  res: FlagResolution,
 ): Promise<void> {
   if (!supabase) throw new Error("Supabase not configured");
-  const { error } = await supabase
-    .from("flags")
-    .update({ status, resolved_by: userId, resolved_at: new Date().toISOString() })
-    .eq("id", id);
+  const { error } = await supabase.rpc("resolve_flag", {
+    p_flag_id: id,
+    p_status: res.status,
+    p_changes: res.changes ?? {},
+    p_note: res.note ?? null,
+  });
   if (error) throw new Error(error.message);
 }
